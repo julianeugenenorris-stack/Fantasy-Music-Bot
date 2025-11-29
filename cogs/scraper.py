@@ -21,19 +21,17 @@ def download_pages():
         try:
             page_url = f"{url}{page}.html" if page > 1 else f"{url}.html"
             r = requests.get(page_url)
-            r.raise_for_status()  # raise an HTTPError for bad responses
+            r.raise_for_status()
         except requests.exceptions.RequestException:
             print(f"No more pages found. Total pages downloaded: {page-1}")
             break
 
-        # Parse the page to see if it contains table rows
         soup = BeautifulSoup(r.content, "html.parser")
         rows = soup.select("tbody tr")
         if not rows:
             print(f"No rows found on page {page}. Stopping download.")
             break
 
-        # Save the page locally
         with open(get_data_file_location(f"page_{page}.html"), "wb") as f:
             f.write(r.content)
 
@@ -46,12 +44,10 @@ def download_pages():
 def delete_downloaded_pages():
     folder = "data"
 
-    # If folder doesn't exist, nothing to delete
     if not os.path.exists(folder):
         print("No data folder found.")
         return
 
-    # Delete all HTML files: page_1.html, page_2.html, etc.
     files = glob.glob(os.path.join(folder, "page_*.html"))
 
     if not files:
@@ -70,7 +66,7 @@ def parse_all_pages():
 
     while True:
         filename = get_data_file_location(
-            f"page_{page}.html")  # <- use full path
+            f"page_{page}.html")
 
         if not os.path.exists(filename):
             break
@@ -138,8 +134,8 @@ def read_file(filename):
     try:
         with open(get_data_file_location(filename), "r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()  # remove newline and extra spaces
-                if line:             # skip empty lines
+                line = line.strip()
+                if line:
                     array.append(line)
     except FileNotFoundError:
         print(f"File {filename} not found.")
