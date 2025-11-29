@@ -10,8 +10,8 @@ scrapeRespectClock = 0.2  # seconds between requests
 
 
 def download_pages():
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("database"):
+        os.makedirs("database")
 
     url = "https://kworb.net/spotify/listeners"
     page = 1
@@ -42,7 +42,7 @@ def download_pages():
 
 
 def delete_downloaded_pages():
-    folder = "data"
+    folder = "database"
 
     if not os.path.exists(folder):
         print("No data folder found.")
@@ -94,15 +94,15 @@ def parse_all_pages():
 
 
 def write_list_to_file(data, filename):
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("database"):
+        os.makedirs("database")
 
     with open(get_data_file_location(filename), "w", encoding="utf-8") as f:
         f.write("\n".join(map(str, data)))
 
 
 def cache_is_current():
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("database", exist_ok=True)
     last_ran_path = get_data_file_location("lastRan.txt")
 
     if not os.path.exists(last_ran_path):
@@ -121,14 +121,14 @@ def cache_is_current():
 
 
 def update_timestamp():
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("database", exist_ok=True)
     with open(get_data_file_location("lastRan.txt"), "w") as f:
         f.write(datetime.now().strftime("%Y-%m-%d"))
 
 
 def read_file(filename):
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("database"):
+        os.makedirs("database")
 
     array = []
     try:
@@ -143,22 +143,27 @@ def read_file(filename):
 
 
 def save_object(obj, filename):
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("database"):
+        os.makedirs("database")
     with open(get_data_file_location(filename), "wb") as f:
         pickle.dump(obj, f)
 
 
 def load_object(filename):
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("database"):
+        os.makedirs("database")
     with open(get_data_file_location(filename), "rb") as f:
         return pickle.load(f)
 
 
 def get_data_file_location(filename):
-    base_folder = os.path.dirname(os.path.abspath(__file__))
-    data_folder = os.path.join(base_folder, "data")
-    if not os.path.exists(data_folder):
-        os.makedirs(data_folder)
-    return os.path.join(data_folder, filename)
+    db_folder = os.getenv("DB_FOLDER")
+
+    if not db_folder:
+        db_folder = os.path.join(os.path.expanduser("~"), "database")
+
+    os.makedirs(db_folder, exist_ok=True)
+
+    print(os.path.abspath(os.path.join(db_folder, filename)))
+
+    return os.path.abspath(os.path.join(db_folder, filename))

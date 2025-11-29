@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from cogs.scraper import *
 from cogs.embedtemplates import *
+from cogs.scoring import *
 
 from cogs.draftroom import Draft, Player
 
@@ -39,6 +40,7 @@ client = Client(command_prefix="!", intents=intents)
 GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
 
 draftClass = None
+Scoring = None
 
 
 @client.tree.command(name="createdraft", description="Start Music Draft", guild=GUILD_ID)
@@ -62,13 +64,19 @@ async def startDraft(interaction: discord.Interaction):
     global draftClass
 
     if draftClass is None:
-        try:
-            if draftClass.isStarted():
-                await interaction.response.send_message("already started draft")
-                return
-        except:
-            await interaction.response.send_message("No draft class is open.\n/createdraft to make one", delete_after=10, ephemeral=True)
+        await interaction.response.send_message("No draft class is open.\n/createdraft to make one", delete_after=10, ephemeral=True)
+        return
+
+    try:
+        if draftClass.isDraftCompleted():
+            await interaction.response.send_message("Draft is already over.", delete_after=10, ephemeral=True)
             return
+        if draftClass.isDraftStarted():
+            await interaction.response.send_message("already started draft", delete_after=10, ephemeral=True)
+            return
+    except:
+        await interaction.response.send_message("No draft class is open.\n/createdraft to make one", delete_after=10, ephemeral=True)
+        return
 
     if draftClass.getSize() < 1:
         await interaction.response.send_message("Not enough players in draft", delete_after=10, ephemeral=True)
@@ -83,7 +91,7 @@ async def startDraft(interaction: discord.Interaction):
 
     websiteArrays = parse_all_pages()
     draftClass.setArtists(websiteArrays[0])
-    draftClass.setListeners(websiteArrays[1])
+    draftClass.setStartListeners(websiteArrays[1])
 
     draftName = f"draft{draftClass.getName()}"
     save_object(draftClass, draftName)
@@ -104,7 +112,7 @@ async def startDraft(interaction: discord.Interaction):
 async def joinDraft(interaction: discord.Interaction):
     global draftClass
 
-    if draftClass.isStarted():
+    if draftClass.isDraftStarted():
         await interaction.response.send_message("Draft already started", delete_after=10, ephemeral=True)
         return
 
@@ -123,11 +131,28 @@ async def joinDraft(interaction: discord.Interaction):
     await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
 
 
+@client.tree.command(name="startseason", description="This will begin the fantasy season, set the update schedual (0=monday, 6=sunday) (24 hour format).", guild=GUILD_ID)
+async def draftArtist(interaction: discord.Interaction, day: int, hour: int, minute: int):
+    if draftClass.isSeasonStarted() is True:
+        await interaction.response.send_message(f"{draftClass.getName()}'s fantasy season is already started.")
+        return
+    await interaction.response.send_message(f"Starting {draftClass.getName()}'s fantasy season.")
+
+    draftClass.setUpdateTimer(day, hour, minute)
+    draftClass.startSeason()
+
+    draftName = f"draft{draftClass.getName()}"
+    save_object(draftClass, draftName)
+
+    client.loop.create_task(weeklyUpdate(
+        draftClass, day, hour, minute, interaction))
+
+
 @client.tree.command(name="draft", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draftArtist(interaction: discord.Interaction, message: str):
 
     try:
-        if not draftClass.isStarted() or draftClass.isDone():
+        if not draftClass.isDraftStarted() or draftClass.isDone():
             await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
             return
     except:
@@ -151,7 +176,7 @@ async def draftArtist(interaction: discord.Interaction, message: str):
                     return
 
                 await interaction.response.send_message(f"{user.name} has drafted {a}!")
-                draftUser.setArtist(a)
+                draftUser.addArtist(a)
 
                 draftClass.nextTurn()
 
@@ -185,19 +210,28 @@ async def reloadDraft(interaction: discord.Interaction, message: str):
         try:
             draftClass = load_object(f"draft{message}")
             await interaction.response.send_message(f"{message} has been reloaded.")
-
-            if draftClass.isStarted():
+            if draftClass.isSeasonStarted():
+                await interaction.followup.send(f"Restarting {draftClass.getName()}'s fantasy season.")
+                client.loop.create_task(weeklyUpdate(draftClass, draftClass.getUpdateTime()[
+                                        0], draftClass.getUpdateTime()[1], draftClass.getUpdateTime()[2], interaction))
+                return
+            if draftClass.isDraftCompleted():
+                await interaction.followup.send(f"Start the fantasy season with /startseason.")
+                return
+            if draftClass.isDraftStarted():
                 nextPlayer = draftClass.getPlayers()[draftClass.getTurn()]
                 user = await client.fetch_user(nextPlayer.getID())
                 await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
-
             return
         except Exception as e:
             await interaction.response.send_message(f"Error: {e}", delete_after=10, ephemeral=True)
+            return
     try:
-        await interaction.response.send_message(f"{draftClass.getName()} has already been created.")
+        await interaction.response.send_message(f"{draftClass.getName()} has already been created.", delete_after=10, ephemeral=True)
+        return
     except FileNotFoundError:
         await interaction.response.send_message(f"{message} is not found.", delete_after=10, ephemeral=True)
+        return
 
 
 @client.tree.command(name="team", description="Show a players team.", guild=GUILD_ID)
@@ -208,7 +242,7 @@ async def showTeam(interaction: discord.Interaction):
         await interaction.response.send_message("Use /weeklyscores, /monthlyscores, and /totalscores to check the team after the draft.", delete_after=10, ephemeral=True)
         return
 
-    if draftClass.isStarted() is False:
+    if draftClass.isDraftStarted() is False:
         await interaction.response.send_message("Need to start draft before checking team.", delete_after=10, ephemeral=True)
         return
 
@@ -229,7 +263,7 @@ async def showTeam(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-@client.tree.command(name="weeklyscores", description="Show a players weekly scores.", guild=GUILD_ID)
+@client.tree.command(name="lastweekscores", description="Show a teams scoring in the previous week.", guild=GUILD_ID)
 async def showWeelyScores(interaction: discord.Interaction):
     if draftClass.isDone() is False:
         await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
@@ -237,9 +271,23 @@ async def showWeelyScores(interaction: discord.Interaction):
 
     user = interaction.user
 
+    player = None
+    for p in draftClass.getPlayers():
+        if p.getID() == user.id:
+            player = p
+            break
 
-@client.tree.command(name="monthlyscores", description="Show a players monthly scores.", guild=GUILD_ID)
-async def showMonthlyScores(interaction: discord.Interaction):
+    if player is None:
+        await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
+        return
+
+    embed = weeklyTemplate(user, player, draftClass)
+
+    await interaction.response.send_message(embed=embed)
+
+
+@client.tree.command(name="totalscores", description="Show a players yearly scores.", guild=GUILD_ID)
+async def showYearlyScores(interaction: discord.Interaction):
     if draftClass.isDone() is False:
         await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
         return
@@ -247,7 +295,25 @@ async def showMonthlyScores(interaction: discord.Interaction):
     user = interaction.user
 
 
-@client.tree.command(name="yearlyscores", description="Show a players yearly scores.", guild=GUILD_ID)
+@client.tree.command(name="leagueoverview", description="Shows overview of all players in league and their scoring totals.", guild=GUILD_ID)
+async def showYearlyScores(interaction: discord.Interaction):
+    if draftClass.isDone() is False:
+        await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+
+@client.tree.command(name="leaders", description="Shows the top scoring artists.", guild=GUILD_ID)
+async def showYearlyScores(interaction: discord.Interaction):
+    if draftClass.isDone() is False:
+        await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+
+@client.tree.command(name="trade", description="Send a trade offer to player.", guild=GUILD_ID)
 async def showYearlyScores(interaction: discord.Interaction):
     if draftClass.isDone() is False:
         await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)

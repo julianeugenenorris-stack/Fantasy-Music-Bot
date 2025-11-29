@@ -13,7 +13,7 @@ def basicTemplate(user, player, draftClass):
     for artist_name in player.getArtists():
         i = draftClass.getArtists().index(artist_name)
 
-        listeners = draftClass.getListeners()[i]
+        listeners = draftClass.getLeagueStartListeners()[i]
 
         embed.add_field(name=f"{count}:\t{artist_name}",
                         value=f"{listeners:,}", inline=False)
@@ -35,7 +35,7 @@ def weeklyTemplate(user, player, draftClass):
     for artist_name in player.getArtists():
         i = draftClass.getArtists().index(artist_name)
 
-        listeners = draftClass.getListeners()[i]
+        listeners = draftClass.getLeagueStartListeners()[i]
 
         embed.add_field(name=f"{count}:\t{artist_name}",
                         value=f"{listeners:,}", inline=False)
@@ -57,7 +57,7 @@ def monthlyTemplate(user, player, draftClass):
     for artist_name in player.getArtists():
         i = draftClass.getArtists().index(artist_name)
 
-        listeners = draftClass.getListeners()[i]
+        listeners = draftClass.getLeagueStartListeners()[i]
 
         embed.add_field(name=f"{count}:\t{artist_name}",
                         value=f"{listeners:,}", inline=False)
