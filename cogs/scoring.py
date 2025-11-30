@@ -28,6 +28,13 @@ async def weeklyUpdate(draftClass, day, hour, minute, interaction):
 
         sleep = (runNext - now).total_seconds()
 
+        if sleep < 0:
+            print(
+                f"Warning: Next run ({next_run}) is in the past. Correcting...")
+            # Skip to the next scheduled week
+            next_run += timedelta(weeks=1)
+            sleep = (next_run - now).total_seconds()
+
         await interaction.followup.send(f"Weekly update scheduled at {runNext}. Sleeping for {(sleep / 3600):.2f} hours.")
         # print(f"Weekly update scheduled at {runNext}. Sleeping for {sleep} seconds.")
         await asyncio.sleep(sleep)
@@ -44,10 +51,13 @@ async def weeklyUpdate(draftClass, day, hour, minute, interaction):
 
             websiteArrays = parse_all_pages()
             draftClass.setArtists(websiteArrays[0])
-            draftClass.setListeners(websiteArrays[1])
 
             draftName = f"draft{draftClass.getName()}"
             save_object(draftClass, draftName)
+
+            draftClass.updateWeeklyListeners(websiteArrays[1])
+            draftClass.updateMonthlyScores()
+            draftClass.updateTotalScores()
 
             for p in draftClass.getPlayers():
                 save_object(p, f"player{p.getID()}.txt")

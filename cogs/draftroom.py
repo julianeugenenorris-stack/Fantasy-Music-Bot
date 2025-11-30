@@ -32,7 +32,7 @@ class Draft:
         return self.rounds
 
     def getPlayers(self):
-        return self.draftRoom
+        return [p for p in self.draftRoom if isinstance(p, Player)]
 
     def getUpdateTime(self):
         return self.draftUpdateTime
@@ -91,7 +91,7 @@ class Draft:
         self.draftUpdateTime.append(hour)
         self.draftUpdateTime.append(minute)
 
-    def weeklyListenerUpdate(self, weekListeners):
+    def updateWeeklyListeners(self, weekListeners):
         artistIndex = {name: i for i, name in enumerate(self.getArtists())}
 
         for player in self.getPlayers():
@@ -112,59 +112,75 @@ class Draft:
                 artistScores.append(score)
                 weeklyTotal += score
 
+            # store weekly totals
             player.addWeeklyScore(weeklyTotal)
-            player.setPrevWeekScores(artistScores)
             player.addToTotalScore(weeklyTotal)
 
-    def updateMonthlyScores(self, weeklyTotals, weeklyArtistScores):
-        players = self.getPlayers()
+            # store per-artist weekly scores correctly
+            player.setPrevWeekArtistScores(artistScores)
 
-        for i, player in enumerate(players):
-            # --- Weekly scoreboard ---
-            week_total = weeklyTotals[i]
-            week_artists = weeklyArtistScores[i]  # list of per-artist scores
+    def updateMonthlyScores(self):
+        for player in self.getPlayers():
 
-            # total his
-            total_history = player.getLastThreeWeeksTotals()
-            total_history.append(week_total)
+            week_total = player.getWeeklyScore()
+            week_artists = player.getPrevWeekArtistScores()
 
-            if len(total_history) > 3:
-                total_history = total_history[-3:]
+            # update total 3-week history
+            totals = player.getLastThreeWeeksTotals()
+            totals.append(week_total)
+            if len(totals) > 3:
+                totals = totals[-3:]
+            player.setLastThreeWeeksTotals(totals)
 
-            player.setLastThreeWeeksTotals(total_history)
+            # update artist scores for 3-week history
+            artists_history = player.getLastThreeWeeksArtists()
+            artists_history.append(week_artists)
+            if len(artists_history) > 3:
+                artists_history = artists_history[-3:]
+            player.setLastThreeWeeksArtists(artists_history)
 
-            # artists his
-            artist_history = player.getLastThreeWeeksArtists()
-            artist_history.append(week_artists)
-
-            if len(artist_history) > 3:
-                artist_history = artist_history[-3:]
-
-            player.setLastThreeWeeksArtists(artist_history)
-
-            # monthly total
-            monthly_total = sum(total_history)
+            # compute monthly totals
+            monthly_total = sum(totals)
             player.setMonthlyTotalScore(monthly_total)
 
-            # monthly artists scores, each artist score for last 3 weeks
+            # compute monthly per-artist totals
             num_artists = len(week_artists)
             monthly_artist_scores = [0] * num_artists
 
-            for week in artist_history:
-                for a in range(num_artists):
-                    monthly_artist_scores[a] += week[a]
+            for week in artists_history:
+                for i in range(num_artists):
+                    monthly_artist_scores[i] += week[i]
 
             player.setMonthlyArtistScores(monthly_artist_scores)
+
+    def updateTotalScores(self):
+        for player in self.getPlayers():
+            artist_scores_history = player.getLastThreeWeeksArtists()
+
+            if not artist_scores_history:
+                player.setTotalArtistScores([])
+                continue
+
+            num_artists = len(artist_scores_history[0])
+            totals = [0] * num_artists
+
+            for week_scores in artist_scores_history:
+                for i in range(num_artists):
+                    totals[i] += week_scores[i]
+
+            player.setTotalArtistScores(totals)
 
 
 class Player:
     def __init__(self, userID):
         self.userID = userID
-        self.totalScore = 0
 
         self.artists = []
         self.artistsTotalScore = []
         self.leagueStartListeners = []
+
+        self.totalScore = 0
+        self.totalArtistScores = []
 
         self.lastThreeWeeksTotals = []
         self.lastThreeWeeksArtists = []
@@ -173,13 +189,12 @@ class Player:
 
         self.prevWeekArtistScores = []
         self.prevWeekScores = []
-        self.totalScores = []
         self.weeklyScore = 0
 
     def getArtists(self):
         return self.artists
 
-    def getprevWeekScores(self):
+    def getPrevWeekScores(self):
         return self.prevWeekScores
 
     def getTotalScore(self):
@@ -191,6 +206,18 @@ class Player:
     def getID(self):
         return self.userID
 
+    def getPrevWeekArtistScores(self):
+        return self.prevWeekArtistScores
+
+    def getLastThreeWeeksTotals(self):
+        return self.lastThreeWeeksTotals
+
+    def getLastThreeWeeksArtists(self):
+        return self.lastThreeWeeksArtists
+
+    def getMonthlyArtistScores(self):
+        return self.monthlyArtistScores
+
     def addArtist(self, name):
         self.artists.append(name)
 
@@ -198,14 +225,20 @@ class Player:
         if len(self.artists) >= location:
             self.artists[location] = name
 
-    def setWeeklyScore(self, totalWeekScores):
+    def addWeeklyScore(self, totalWeekScores):
         self.weeklyScore = totalWeekScores
 
     def setPrevWeekScores(self, prevWeekScores):
-        self.prevWeekScores.copy(prevWeekScores)
+        self.prevWeekScores = prevWeekScores
+
+    def setPrevWeekArtistScores(self, prevWeekArtistScores):
+        self.prevWeekArtistScores = prevWeekArtistScores
 
     def setArtistsTotalScore(self, totalScore):
         self.artistsTotalScore = totalScore
+
+    def setTotalArtistScores(self, totalArtistScores):
+        self.totalArtistScores = totalArtistScores
 
     def setLastWeekScore(self, lastWeeksScore):
         self.lastWeeksScores = lastWeeksScore
@@ -213,23 +246,14 @@ class Player:
     def addToTotalScore(self, totalScore):
         self.totalScore += totalScore
 
-    def setWeeklyScore(self, weeklyScore):
-        self.weeklyScore = weeklyScore
+    def setLastThreeWeeksTotals(self, lastThreeWeeksTotals):
+        self.lastThreeWeeksTotals = lastThreeWeeksTotals
 
-    def getLastThreeWeeksTotals(self):
-        return self.lastThreeWeeksTotals
+    def setLastThreeWeeksArtists(self, lastThreeWeeksArtists):
+        self.lastThreeWeeksArtists = lastThreeWeeksArtists
 
-    def setLastThreeWeeksTotals(self, arr):
-        self.lastThreeWeeksTotals = arr
+    def setMonthlyArtistScores(self, monthlyArtistScores):
+        self.monthlyArtistScores = monthlyArtistScores
 
-    def getLastThreeWeeksArtists(self):
-        return self.lastThreeWeeksArtists
-
-    def setLastThreeWeeksArtists(self, arr):
-        self.lastThreeWeeksArtists = arr
-
-    def setMonthlyArtistScores(self, arr):
-        self.monthlyArtistScores = arr
-
-    def setMonthlyTotalScore(self, score):
-        self.monthlyTotalScore = score
+    def setMonthlyTotalScore(self, monthlyTotalScore):
+        self.monthlyTotalScore = monthlyTotalScore

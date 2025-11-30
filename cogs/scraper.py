@@ -6,16 +6,34 @@ import os
 import glob
 import pickle
 
-scrapeRespectClock = 0.2  # seconds between requests
+scrapeRespectClock = 1  # seconds between requests
 
 
 def download_pages():
+    # delete old
+    folder = "database"
+
+    if not os.path.exists(folder):
+        print("No data folder found.")
+        return
+
+    files = glob.glob(os.path.join(folder, "page_*.html"))
+
+    if not files:
+        print("No page files to delete.")
+        return
+
+    for file in files:
+        os.remove(file)
+        print(f"Deleted {file}")
+
     if not os.path.exists("database"):
         os.makedirs("database")
 
     url = "https://kworb.net/spotify/listeners"
     page = 1
 
+    # print new
     while True:
         time.sleep(scrapeRespectClock)
         try:
@@ -39,24 +57,6 @@ def download_pages():
         page += 1
 
     return
-
-
-def delete_downloaded_pages():
-    folder = "database"
-
-    if not os.path.exists(folder):
-        print("No data folder found.")
-        return
-
-    files = glob.glob(os.path.join(folder, "page_*.html"))
-
-    if not files:
-        print("No page files to delete.")
-        return
-
-    for file in files:
-        os.remove(file)
-        print(f"Deleted {file}")
 
 
 def parse_all_pages():
