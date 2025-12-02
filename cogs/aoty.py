@@ -376,4 +376,4 @@ class AOTY(AlbumMethods, ArtistMethods):
 
 client = AOTY()
 
-print(client.artist_name(""))
+print(client.artist_albums('183-kanye-west'))

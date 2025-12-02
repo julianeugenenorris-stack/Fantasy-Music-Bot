@@ -25,7 +25,7 @@ class Player:
         self.prevWeekScores = []
         self.weeklyScore = 0
 
-    def All(self):
+    def get_all_artists(self):
         return self.artists
 
     def getPrevWeekScores(self):
@@ -37,8 +37,8 @@ class Player:
     def getWeeklyScore(self):
         return self.weeklyScore
 
-    def getID(self):
-        return self.userID
+    def get_id(self):
+        return self.user_id
 
     def getPrevWeekArtistScores(self):
         return self.prevWeekArtistScores

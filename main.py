@@ -1,5 +1,5 @@
 from cogs.client import start_client
-
+from typing import Literal
 from dotenv import load_dotenv, dotenv_values
 
 from cogs.scraper import *
@@ -7,6 +7,7 @@ from cogs.embedtemplates import *
 from cogs.scoring import *
 
 from cogs.draft import Draft
+
 
 load_dotenv()
 config = dotenv_values()
@@ -24,7 +25,7 @@ async def on_guild_join(guild):
 
 
 @client.tree.command(name="createdraft", description="Start Music Draft", guild=GUILD_ID)
-async def createDraft(interaction: discord.Interaction, draftname: str, rounds: int, pointsPerListener: int, ):
+async def createDraft(interaction: discord.Interaction, draftname: str, rounds: int):
     global draft
 
     if int(rounds) > 100:
@@ -32,12 +33,15 @@ async def createDraft(interaction: discord.Interaction, draftname: str, rounds: 
         return
 
     if draft is None:
-        await interaction.response.send_message(f"Draft {draftname} is open. Type /join to join.")
-        draft = Draft(draftname, int(rounds))
-        draft.
+        draft = Draft(name=draftname, rounds=int(rounds))
+        await interaction.response.send_message(f"Draft {draftname} is now open.")
         return
 
-    await interaction.response.send_message(f"Draft {draft.getName()} was already created in the guild.\nOnly one draft per guild id.", delete_after=10, ephemeral=True)
+    if draft is not None:
+        await interaction.response.send_message(f"Draft {draft.get_name()} is already open.")
+        return
+
+    await interaction.response.send_message(f"Draft {draft.get_name()} was already created in the guild.\nOnly one draft per guild id.", delete_after=10, ephemeral=True)
 
 
 @client.tree.command(name="startdraft", description="Start Music Draft", guild=GUILD_ID)
@@ -49,17 +53,17 @@ async def startDraft(interaction: discord.Interaction):
         return
 
     try:
-        if draft.is_stage():
+        if draft.is_stage(stage=2):
             await interaction.response.send_message("Draft is already over.", delete_after=10, ephemeral=True)
             return
-        if draft.isDraftStarted():
+        if draft.is_stage(stage=2):
             await interaction.response.send_message("already started draft", delete_after=10, ephemeral=True)
             return
     except:
         await interaction.response.send_message("No draft class is open.\n/createdraft to make one", delete_after=10, ephemeral=True)
         return
 
-    if draft.getSize() < 1:
+    if draft.get_size() < 1:
         await interaction.response.send_message("Not enough players in draft", delete_after=10, ephemeral=True)
         return
 
@@ -71,42 +75,71 @@ async def startDraft(interaction: discord.Interaction):
         update_timestamp()
 
     websiteArrays = parse_all_pages()
-    draft.setArtists(websiteArrays[0])
-    draft.setStartListeners(websiteArrays[1])
+    draft.set_all_artists(websiteArrays[0])
+    draft.set_starting_listeners(websiteArrays[1])
 
-    draftName = f"draft{draft.getName()}"
+    draftName = f"draft{draft.get_name()}"
     save_object(draft, draftName)
 
-    for p in draft.getPlayers():
-        save_object(p, f"player{p.getID()}.txt")
+    for p in draft.get_all_players():
+        save_object(p, f"player{p.get_id()}.txt")
 
     await interaction.followup.send("Draft ready! Starting Draft Lobby.")
 
-    draft.startDraft()
+    # start draft
+    draft.next_stage()
 
-    firstPlayer = draft.getPlayers()[0]
-    user = await client.fetch_user(firstPlayer.getID())
+    firstPlayer = draft.get_all_players()[0]
+    user = await client.fetch_user(firstPlayer.get_id())
     await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
+
+
+@client.tree.command(name="settings", description="Show settings of the draft.", guild=GUILD_ID)
+async def createDraft(interaction: discord.Interaction,
+                      action: Literal["get", "set"] = "get",
+                      rounds: int | None = None,
+                      monthly: float | None = None,
+                      change: float | None = None,
+                      aoty: float | None = None,
+                      aoty_cutoff: float | None = None,
+                      billboard: float | None = None,
+                      billboard_multiplier: int | None = None,
+                      billboard_top: int | None = None, ):
+    global draft
+    if action == "get":
+        settings = draft.get_settings()
+        formatted_string = ", ".join(
+            [f"{key}: {value}" for key, value in settings.items()])
+        await interaction.response.send_message(formatted_string)
+        return
+    if action == "set":
+        draft.new_settings(rounds=rounds, monthly=monthly, change=change, aoty=aoty, aoty_cutoff=aoty_cutoff,
+                           billboard=billboard, billboard_multiplier=billboard_multiplier, billboard_top=billboard_top)
+        settings = draft.get_settings()
+        formatted_string = ", ".join(
+            [f"{key}: {value}" for key, value in settings.items()])
+        await interaction.response.send_message(formatted_string)
+        return
 
 
 @client.tree.command(name="join", description="Join fantasy draft as a player.", guild=GUILD_ID)
 async def joinDraft(interaction: discord.Interaction):
     global draft
 
-    if draft.isDraftStarted():
+    if draft.is_stage(stage={1, 2, 3}):
         await interaction.response.send_message("Draft already started", delete_after=10, ephemeral=True)
         return
 
     user = interaction.user
     if draft is not None:
-        for p in draft.getPlayers():
-            if p.getID() == user.id:
+        for p in draft.get_all_players():
+            if p.get_id() == user.id:
                 await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
                 return
 
     draft.add_new_player(user.id, user.name)
 
-    draftName = f"draft{draft.getName()}"
+    draftName = f"draft{draft.get_name()}"
     save_object(draft, draftName)
 
     await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
@@ -114,15 +147,16 @@ async def joinDraft(interaction: discord.Interaction):
 
 @client.tree.command(name="startseason", description="This will begin the fantasy season, set the update schedual (0=monday, 6=sunday) (24 hour format).", guild=GUILD_ID)
 async def draftArtist(interaction: discord.Interaction, day: int, hour: int, minute: int):
-    if draft.isSeasonStarted() is True:
-        await interaction.response.send_message(f"{draft.getName()}'s fantasy season is already started.")
+    if draft.is_stage({1, 2, 3}):
+        await interaction.response.send_message(f"{draft.get_name()}'s fantasy season is already started.")
         return
-    await interaction.response.send_message(f"Starting {draft.getName()}'s fantasy season.")
+    await interaction.response.send_message(f"Starting {draft.get_name()}'s fantasy season.")
 
     draft.setUpdateTimer(day, hour, minute)
-    draft.startSeason()
+    # start season
+    draft.next_stage()
 
-    draftName = f"draft{draft.getName()}"
+    draftName = f"draft{draft.get_name()}"
     save_object(draft, draftName)
 
     client.loop.create_task(weeklyUpdate(
@@ -133,8 +167,11 @@ async def draftArtist(interaction: discord.Interaction, day: int, hour: int, min
 async def draftArtist(interaction: discord.Interaction, message: str):
 
     try:
-        if not draft.isDraftStarted() or draft.isDone():
+        if draft.is_stage(0):
             await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
+            return
+        elif draft.is_stage(stage={2, 3}):
+            await interaction.response.send_message("Draft is already finished", delete_after=10, ephemeral=True)
             return
     except:
         await interaction.response.send_message("Need to create or import a draft room.", delete_after=10, ephemeral=True)
@@ -142,15 +179,15 @@ async def draftArtist(interaction: discord.Interaction, message: str):
 
     user = interaction.user
 
-    if draft.isDraftCompleted():
+    if draft.is_stage(stage={2, 3}):
         await interaction.response.send_message(
             "Draft is already over.", delete_after=10, ephemeral=True)
         return
 
-    if draft.getPlayers()[draft.getTurn()].getID() == user.id:
-        for a in draft.getAllArtists():
+    if draft.get_all_players()[draft.get_turn()].get_id() == user.id:
+        for a in draft.get_all_artists():
             if a == message:
-                player = draft.getPlayers()[draft.getTurn()]
+                player = draft.get_allPlayers()[draft.get_turn()]
 
                 if a in player.getArtists():
                     await interaction.response.send_message(f"You have already drafted {a}. \nDraft someone else.", delete_after=10, ephemeral=True)
@@ -159,19 +196,19 @@ async def draftArtist(interaction: discord.Interaction, message: str):
                 await interaction.response.send_message(f"{user.name} has drafted {a}!")
                 player.addArtist(a)
 
-                draft.nextTurn()
+                draft.next_turn()
 
                 if not draft.isDraftCompleted():
-                    nextPlayer = draft.getPlayers()[draft.getTurn()]
-                    user = await client.fetch_user(nextPlayer.getID())
+                    nextPlayer = draft.get_all_players()[draft.get_turn()]
+                    user = await client.fetch_user(nextPlayer.get_id())
 
-                    draftName = f"draft{draft.getName()}"
+                    draftName = f"draft{draft.get_name()}"
                     save_object(draft, draftName)
 
                     await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
                     return
                 else:
-                    draftName = f"draft{draft.getName()}"
+                    draftName = f"draft{draft.get_name()}"
                     save_object(draft, draftName)
 
                     await interaction.followup.send("Draft Completed.")
@@ -192,7 +229,7 @@ async def reloadDraft(interaction: discord.Interaction, message: str):
             draft = load_object(f"draft{message}")
             await interaction.response.send_message(f"{message} has been reloaded.")
             if draft.isSeasonStarted():
-                await interaction.followup.send(f"Restarting {draft.getName()}'s fantasy season.")
+                await interaction.followup.send(f"Restarting {draft.get_name()}'s fantasy season.")
                 client.loop.create_task(weeklyUpdate(draft, draft.getUpdateTime()[
                                         0], draft.getUpdateTime()[1], draft.getUpdateTime()[2], interaction))
                 return
@@ -200,15 +237,15 @@ async def reloadDraft(interaction: discord.Interaction, message: str):
                 await interaction.followup.send(f"Start the fantasy season with /startseason.")
                 return
             if draft.isDraftStarted():
-                nextPlayer = draft.getPlayers()[draft.getTurn()]
-                user = await client.fetch_user(nextPlayer.getID())
+                nextPlayer = draft.get_all_players()[draft.getTurn()]
+                user = await client.fetch_user(nextPlayer.get_id())
                 await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
             return
         except Exception as e:
             await interaction.response.send_message(f"Error: {e}", delete_after=10, ephemeral=True)
             return
     try:
-        await interaction.response.send_message(f"{draft.getName()} has already been created.", delete_after=10, ephemeral=True)
+        await interaction.response.send_message(f"{draft.get_name()} has already been created.", delete_after=10, ephemeral=True)
         return
     except FileNotFoundError:
         await interaction.response.send_message(f"{message} is not found.", delete_after=10, ephemeral=True)
@@ -230,8 +267,8 @@ async def showTeam(interaction: discord.Interaction):
     user = interaction.user
 
     player = None
-    for p in draft.getPlayers():
-        if p.getID() == user.id:
+    for p in draft.get_all_players():
+        if p.get_id() == user.id:
             player = p
             break
 
@@ -257,8 +294,8 @@ async def showWeelyScores(interaction: discord.Interaction):
     user = interaction.user
 
     player = None
-    for p in draft.getPlayers():
-        if p.getID() == user.id:
+    for p in draft.get_all_players():
+        if p.get_id() == user.id:
             player = p
             break
 
@@ -284,8 +321,8 @@ async def showYearlyScores(interaction: discord.Interaction):
     user = interaction.user
 
     player = None
-    for p in draft.getPlayers():
-        if p.getID() == user.id:
+    for p in draft.get_all_players():
+        if p.get_id() == user.id:
             player = p
             break
 
@@ -314,17 +351,18 @@ async def draftArtist(interaction: discord.Interaction):
         download_pages()
 
         websiteArrays = parse_all_pages()
-        draft.setArtists(websiteArrays[0])
+        draft.set_all_artists(websiteArrays[0])
+        draft.set_current_listeners(websiteArrays[1])
 
-        draftName = f"draft{draft.getName()}"
+        draftName = f"draft{draft.get_name()}"
         save_object(draft, draftName)
 
         draft.updateWeeklyListeners(websiteArrays[1])
         draft.updateMonthlyScores()
         draft.updateTotalScores()
 
-        for p in draft.getPlayers():
-            save_object(p, f"player{p.getID()}.txt")
+        for p in draft.get_all_players():
+            save_object(p, f"player{p.get_id()}.txt")
 
         await interaction.followup.send("Weekly update completed!")
     except Exception as e:

@@ -1,4 +1,4 @@
-from player import Player
+from cogs.player import Player
 
 
 class Draft:
@@ -6,9 +6,10 @@ class Draft:
             self,
             name: str,
             rounds: int,
-            monthly: float,
+            monthly: float = 0.00000003333,
             change: float | None = None,
             aoty: float | None = None,
+            aoty_cutoff: float | None = None,
             billboard: float | None = None,
             billboard_multiplier: int | None = None,
             billboard_top: int | None = None
@@ -16,10 +17,14 @@ class Draft:
         """
         :param name: The name of the league used in graphics.
         :type name: str
+        :param rounds: Number of rounds in the draft.
+        :type rounds: int
         :param monthly: How many points monthly listeners will count for per week.
         :type monthly: float
         :param change: How many points will be added as an artists monthly listeners goes up and down.
         :type change: float | None
+        :param aoty: How many points will be added for album of the year user scores.
+        :type aoty: float | None
         :param aoty: How many points will be added for album of the year user scores.
         :type aoty: float | None
         :param billboard: How many points will be the base for the billboard scoring.
@@ -39,8 +44,18 @@ class Draft:
         self.direction: int = 1
         self.rounds: int = rounds
 
+        self.starting_listeners: list = None
+        self.current_listeners: list = None
+
+        self.monthly: float = monthly
+        self.change: float | None = change
+        self.aoty: float | None = aoty
+        self.aoty_cutoff: float | None = aoty_cutoff
+        self.billboard: float | None = billboard
+        self.billboard_multiplier: int | None = billboard_multiplier
+        self.billboard_top: int | None = billboard_top
+
         self.all_artists: list[str] = []
-        """All the artists in the league, changes weekly"""
 
         self.stage: int = 0
         """0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
@@ -48,8 +63,64 @@ class Draft:
         self.draftUpdateTime: list[int] = []
         """weekday - hour - minute"""
 
+    def new_settings(self,
+                     rounds: int | None = None,
+                     monthly: float | None = None,
+                     change: float | None = None,
+                     aoty: float | None = None,
+                     aoty_cutoff: float | None = None,
+                     billboard: float | None = None,
+                     billboard_multiplier: int | None = None,
+                     billboard_top: int | None = None) -> bool:
+        """
+        :param rounds: Number of rounds in the draft.
+        :type rounds: int
+        :param monthly: How many points monthly listeners will count for per week.
+        :type monthly: float
+        :param change: How many points will be added as an artists monthly listeners goes up and down.
+        :type change: float | None
+        :param aoty: How many points will be added for album of the year user scores.
+        :type aoty: float | None
+        :param aoty: How many points will be added for album of the year user scores.
+        :type aoty: float | None
+        :param billboard: How many points will be the base for the billboard scoring.
+        :type billboard: float | None
+        :param billboard_multiplier: The multiplier for each billboard spot up the list.
+        :type billboard_multiplier: int | None
+        :param billboard_top: To what postition to give points. (5 = top 5 artists get points)
+        :type billboard_top: int | None
+        """
+        if rounds is not None:
+            self.rounds = rounds
+        if monthly is not None:
+            self.monthly = monthly
+        if change is not None:
+            self.change = change
+        if aoty is not None:
+            self.aoty = aoty
+        if aoty_cutoff is not None:
+            self.aoty_cutoff = aoty_cutoff
+        if billboard is not None:
+            self.billboard = billboard
+        if billboard_multiplier is not None:
+            self.billboard_multiplier = billboard_multiplier
+        if billboard_top is not None:
+            self.monthly = billboard_top
+
+    def get_settings(self) -> list:
+        return {
+            "rounds": self.rounds,
+            "change": self.change,
+            "monthly": self.monthly,
+            "aoty": self.aoty,
+            "aoty_cutoff": self.aoty_cutoff,
+            "billboard": self.billboard,
+            "billboard_multiplier": self.billboard_multiplier,
+            "billboard_top": self.billboard_top
+        }
+
     def is_stage(self, stage: int | list) -> bool:
-        """0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started
+        """0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is over
         :param stage: takes in a stage and checks if the draft is in the matching stage.
         :type stage: int | list
         :returns: if it is the current draft stage or not.
@@ -65,9 +136,12 @@ class Draft:
             return False
 
     def next_stage(self) -> None:
-        """Goes to next stage of draft. 0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
-        if self.stage > 3:
-            print("Error: Max stage limit reached")
+        """Goes to next stage of draft. 0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is overd"""
+        if self.stage is 3:
+            print("Warning: Season is over.")
+
+        if self.stage > 4:
+            print("Error: Max stage limit reached.")
             return
         self.stage += 1
 
@@ -127,8 +201,11 @@ class Draft:
     def set_all_artists(self, artists: list):
         self.all_artists = artists
 
-    def setStartListeners(self, listeners):
-        self.leagueStartListeners = listeners
+    def set_starting_listeners(self, listeners: list):
+        self.starting_listeners = listeners
+
+    def set_current_listeners(self, listeners: list):
+        self.current_listeners = listeners
 
     def setUpdateTimer(self, weekday, hour, minute):
         self.draftUpdateTime.append(weekday)
@@ -136,7 +213,8 @@ class Draft:
         self.draftUpdateTime.append(minute)
 
     def updateWeeklyListeners(self, weekListeners):
-        artistIndex = {name: i for i, name in enumerate(self.All())}
+        artistIndex = {name: i for i,
+                       name in enumerate(self.get_all_artists())}
 
         for player in self.get_all_players():
             artistScores = []

@@ -183,3 +183,5 @@ cython_debug/
 .env
 /database
 TODOList.txt
+test.py
+test.py
