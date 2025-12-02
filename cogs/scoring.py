@@ -4,7 +4,7 @@ import asyncio
 from cogs.scraper import *
 
 
-async def weeklyUpdate(draftClass, day, hour, minute, interaction):
+async def weeklyUpdate(draft, day, hour, minute, interaction):
     # set the update time
     # 0 is moday, 6 is sunday
     weekdayTimer = day
@@ -40,27 +40,28 @@ async def weeklyUpdate(draftClass, day, hour, minute, interaction):
         await asyncio.sleep(sleep)
 
         # --- RUN YOUR UPDATE CODE ---
-        await interaction.followup.send("Starting weekly artist score update...")
+        await interaction.response.send_message("Starting weekly artist score update...")
         try:
-            if draftClass is None:
+            if draft is None:
                 await interaction.followup.send("No draft loaded, skipping update.")
-                continue
+                return
 
             await interaction.followup.send("Downloading latest artists and listeners...")
             download_pages()
 
             websiteArrays = parse_all_pages()
-            draftClass.setArtists(websiteArrays[0])
+            draft.set_all_artists(websiteArrays[0])
+            draft.set_current_listeners(websiteArrays[1])
 
-            draftName = f"draft{draftClass.getName()}"
-            save_object(draftClass, draftName)
+            draftName = f"draft{draft.get_name()}"
+            save_object(draft, draftName)
 
-            draftClass.updateWeeklyListeners(websiteArrays[1])
-            draftClass.updateMonthlyScores()
-            draftClass.updateTotalScores()
+            draft.update_weekly_score(websiteArrays[1])
+            draft.update_monthly_score()
+            draft.update_total_score()
 
-            for p in draftClass.getPlayers():
-                save_object(p, f"player{p.getID()}.txt")
+            for p in draft.get_all_players():
+                save_object(p, f"player{p.get_id()}.txt")
 
             await interaction.followup.send("Weekly update completed!")
         except Exception as e:

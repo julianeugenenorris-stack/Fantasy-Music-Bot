@@ -212,82 +212,42 @@ class Draft:
         self.draftUpdateTime.append(hour)
         self.draftUpdateTime.append(minute)
 
-    def updateWeeklyListeners(self, weekListeners):
+    def update_weekly_score(self, weekListeners):
         artistIndex = {name: i for i,
                        name in enumerate(self.get_all_artists())}
 
         for player in self.get_all_players():
-            artistScores = []
-            weeklyTotal = 0
+            weekly_total = 0
 
-            for artistName in player.All():
+            for artist in player.artists:
+                player.ensure_artist(artist)
 
-                if artistName not in artistIndex:
-                    print(
-                        f"Warning: artist {artistName} not found in artist pool.")
-                    artistScores.append(0)
-                    continue
+                idx = artistIndex.get(artist, None)
+                score = weekListeners[idx] if idx is not None else 0
 
-                idx = artistIndex[artistName]
-                score = weekListeners[idx]
+                # log weekly score
+                player.artist_scores[artist]["weekly"].append(score)
+                weekly_total += score
 
-                artistScores.append(score)
-                weeklyTotal += score
+            player.weekly_score = weekly_total
+            player.total_score += weekly_total
 
-            # store weekly totals
-            player.addWeeklyScore(weeklyTotal)
-            player.addToTotalScore(weeklyTotal)
-
-            # store per-artist weekly scores correctly
-            player.setPrevWeekArtistScores(artistScores)
-
-    def updateMonthlyScores(self):
+    def update_monthly_score(self):
         for player in self.get_all_players():
 
-            week_total = player.getWeeklyScore()
-            week_artists = player.getPrevWeekArtistScores()
+            for artist in player.artists:
+                scores = player.artist_scores[artist]["weekly"]
+                player.ensure_artist(artist)
 
-            # update total 3-week history
-            totals = player.getLastThreeWeeksTotals()
-            totals.append(week_total)
-            if len(totals) > 3:
-                totals = totals[-3:]
-            player.setLastThreeWeeksTotals(totals)
+                # last 4 weeks = "month"
+                recent = scores[-4:]
 
-            # update artist scores for 3-week history
-            artists_history = player.getLastThreeWeeksArtists()
-            artists_history.append(week_artists)
-            if len(artists_history) > 3:
-                artists_history = artists_history[-3:]
-            player.setLastThreeWeeksArtists(artists_history)
+                monthly_total = sum(recent)
+                player.artist_scores[artist]["monthly"].append(monthly_total)
 
-            # compute monthly totals
-            monthly_total = sum(totals)
-            player.setMonthlyTotalScore(monthly_total)
-
-            # compute monthly per-artist totals
-            num_artists = len(week_artists)
-            monthly_artist_scores = [0] * num_artists
-
-            for week in artists_history:
-                for i in range(num_artists):
-                    monthly_artist_scores[i] += week[i]
-
-            player.setMonthlyArtistScores(monthly_artist_scores)
-
-    def updateTotalScores(self):
+    def update_total_score(self):
         for player in self.get_all_players():
-            artist_scores_history = player.getLastThreeWeeksArtists()
-
-            if not artist_scores_history:
-                player.setTotalArtistScores([])
-                continue
-
-            num_artists = len(artist_scores_history[0])
-            totals = [0] * num_artists
-
-            for week_scores in artist_scores_history:
-                for i in range(num_artists):
-                    totals[i] += week_scores[i]
-
-            player.setTotalArtistScores(totals)
+            for artist in player.artists:
+                scores = player.artist_scores[artist]["weekly"]
+                yearly_total = sum(scores)
+                player.artist_scores[artist]["yearly_total"] = yearly_total
