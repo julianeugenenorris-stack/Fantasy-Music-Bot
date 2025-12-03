@@ -1,12 +1,14 @@
-from cogs.client import start_client
 from typing import Literal
 from dotenv import load_dotenv, dotenv_values
 
 from cogs.scraper import *
 from cogs.embedtemplates import *
 from cogs.scoring import *
-
 from cogs.draft import Draft
+from cogs.client import start_client
+
+import discord
+from discord.ext import commands
 
 
 load_dotenv()
@@ -16,7 +18,11 @@ DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 OWNER_ID = config.get("OWNER_ID")
 
 client = start_client(GUILD_ID, OWNER_ID)
-draft = None
+draft: Draft = None
+
+
+draft_command_cooldown: int = 1
+team_command_cooldown: int = 60
 
 
 @client.event
@@ -53,10 +59,10 @@ async def start_draft(interaction: discord.Interaction):
         return
 
     try:
-        if draft.is_stage(stage=2):
+        if draft.is_stage(stage=[2, 3, 4]):
             await interaction.response.send_message("Draft is already over.", delete_after=10, ephemeral=True)
             return
-        if draft.is_stage(stage=2):
+        if draft.is_stage(stage=1):
             await interaction.response.send_message("already started draft", delete_after=10, ephemeral=True)
             return
     except:
@@ -100,12 +106,18 @@ async def settings(interaction: discord.Interaction,
                    rounds: int | None = None,
                    monthly: float | None = None,
                    change: float | None = None,
-                   aoty: float | None = None,
-                   aoty_cutoff: float | None = None,
+                   aoty_range: Literal["90+", "89-85", "84-82",
+                                       "81-79", "78-75", "74-65", "64-"] | None = None,
+                   aoty_score: float | None = None,
                    billboard: float | None = None,
                    billboard_multiplier: int | None = None,
                    billboard_top: int | None = None, ):
     global draft
+
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
     if action == "get":
         settings = draft.get_settings()
         formatted_string = ", ".join(
@@ -113,20 +125,25 @@ async def settings(interaction: discord.Interaction,
         await interaction.response.send_message(formatted_string)
         return
     if action == "set":
-        draft.new_settings(rounds=rounds, monthly=monthly, change=change, aoty=aoty, aoty_cutoff=aoty_cutoff,
+        draft.new_settings(rounds=rounds, monthly=monthly, change=change, aoty_score=aoty_score, aoty_range=aoty_range,
                            billboard=billboard, billboard_multiplier=billboard_multiplier, billboard_top=billboard_top)
         settings = draft.get_settings()
         formatted_string = ", ".join(
             [f"{key}: {value}" for key, value in settings.items()])
-        await interaction.response.send_message(formatted_string)
+        await interaction.response.send_message(F"New settings are:\n{formatted_string}")
         return
 
 
 @client.tree.command(name="join", description="Join fantasy draft as a player.", guild=GUILD_ID)
+@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
 async def join(interaction: discord.Interaction):
     global draft
 
-    if draft.is_stage(stage={1, 2, 3}):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to join.")
+        return
+
+    if draft.is_stage(stage=[1, 2, 3]):
         await interaction.response.send_message("Draft already started", delete_after=10, ephemeral=True)
         return
 
@@ -145,32 +162,46 @@ async def join(interaction: discord.Interaction):
     await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
 
 
+@join.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
 @client.tree.command(name="startseason", description="This will begin the fantasy season, set the update schedual (0=monday, 6=sunday) (24 hour format).", guild=GUILD_ID)
 async def start_season(interaction: discord.Interaction, day: int, hour: int, minute: int):
-    if draft.is_stage({1, 2, 3}):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([3, 4]):
         await interaction.response.send_message(f"{draft.get_name()}'s fantasy season is already started.")
         return
+
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message(f"{draft.get_name()}'s has not drafted.")
+        return
+
     await interaction.response.send_message(f"Starting {draft.get_name()}'s fantasy season.")
 
-    draft.setUpdateTimer(day, hour, minute)
     # start season
-    draft.next_stage()
 
     draftName = f"draft{draft.get_name()}"
     save_object(draft, draftName)
-
-    client.loop.create_task(weeklyUpdate(
-        draft, day, hour, minute, interaction))
+    client.loop.create_task(weekly_update(
+        draft, interaction, day=day, hour=hour, minute=minute))
 
 
 @client.tree.command(name="draft", description="Draft artists to fantasy team.", guild=GUILD_ID)
+@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
 async def draft_artist(interaction: discord.Interaction, message: str):
-
     try:
         if draft.is_stage(0):
             await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
             return
-        elif draft.is_stage(stage={2, 3}):
+        elif draft.is_stage([2, 3, 4]):
             await interaction.response.send_message("Draft is already finished", delete_after=10, ephemeral=True)
             return
     except:
@@ -179,7 +210,7 @@ async def draft_artist(interaction: discord.Interaction, message: str):
 
     user = interaction.user
 
-    if draft.is_stage(stage={2, 3}):
+    if draft.is_stage(stage=[2, 3]):
         await interaction.response.send_message(
             "Draft is already over.", delete_after=10, ephemeral=True)
         return
@@ -187,18 +218,18 @@ async def draft_artist(interaction: discord.Interaction, message: str):
     if draft.get_all_players()[draft.get_turn()].get_id() == user.id:
         for a in draft.get_all_artists():
             if a == message:
-                player = draft.get_allPlayers()[draft.get_turn()]
+                player = draft.get_all_players()[draft.get_turn()]
 
-                if a in player.getArtists():
-                    await interaction.response.send_message(f"You have already drafted {a}. \nDraft someone else.", delete_after=10, ephemeral=True)
+                if a in player.get_all_artists():
+                    await interaction.response.send_message(f"You have already drafted {a}.\nDraft someone else.", delete_after=10, ephemeral=True)
                     return
 
                 await interaction.response.send_message(f"{user.name} has drafted {a}!")
-                player.addArtist(a)
+                player.draft_artist(a)
 
                 draft.next_turn()
 
-                if not draft.isDraftCompleted():
+                if draft.is_stage(1):
                     nextPlayer = draft.get_all_players()[draft.get_turn()]
                     user = await client.fetch_user(nextPlayer.get_id())
 
@@ -220,24 +251,32 @@ async def draft_artist(interaction: discord.Interaction, message: str):
         return
 
 
+@draft_artist.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
 @client.tree.command(name="reloaddraft", description="Join fantasy draft as a player.", guild=GUILD_ID)
-async def reload_draft(interaction: discord.Interaction, message: str):
+async def reload_draft(interaction: discord.Interaction, name: str):
     global draft
 
     if draft is None:
         try:
-            draft = load_object(f"draft{message}")
-            await interaction.response.send_message(f"{message} has been reloaded.")
-            if draft.isSeasonStarted():
+            draft = load_object(f"draft{name}")
+            await interaction.response.send_message(f"{name} has been reloaded.")
+            if draft.is_stage(3):
                 await interaction.followup.send(f"Restarting {draft.get_name()}'s fantasy season.")
-                client.loop.create_task(weeklyUpdate(draft, draft.getUpdateTime()[
-                                        0], draft.getUpdateTime()[1], draft.getUpdateTime()[2], interaction))
+                client.loop.create_task(weekly_update(
+                    draft, interaction))
                 return
-            if draft.isDraftCompleted():
+            if draft.is_stage(2):
                 await interaction.followup.send(f"Start the fantasy season with /startseason.")
                 return
-            if draft.isDraftStarted():
-                nextPlayer = draft.get_all_players()[draft.getTurn()]
+            if draft.is_stage(1):
+                nextPlayer = draft.get_all_players()[draft.get_turn()]
                 user = await client.fetch_user(nextPlayer.get_id())
                 await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
             return
@@ -248,13 +287,17 @@ async def reload_draft(interaction: discord.Interaction, message: str):
         await interaction.response.send_message(f"{draft.get_name()} has already been created.", delete_after=10, ephemeral=True)
         return
     except FileNotFoundError:
-        await interaction.response.send_message(f"{message} is not found.", delete_after=10, ephemeral=True)
+        await interaction.response.send_message(f"{name} is not found.", delete_after=10, ephemeral=True)
         return
 
 
 @client.tree.command(name="team", description="Show a players team.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def show_team(interaction: discord.Interaction):
     global draft
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
 
     if draft.is_stage(0):
         await interaction.response.send_message("Need to start draft before checking team.", delete_after=10, ephemeral=True)
@@ -281,9 +324,22 @@ async def show_team(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-@client.tree.command(name="scores", description="Show a teams scoring in the previous week.", guild=GUILD_ID)
-async def show_scores(interaction: discord.Interaction, time: Literal["week", "month", "total"] | int, show: Literal["false"] | None):
-    if draft.is_stage({0, 1}):
+@show_team.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="listeners", description="Show a teams listeners for a certain time or time frame.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_listeners(interaction: discord.Interaction, time: Literal["week", "month", "total"], week: int | None, show: bool | None):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1]):
         await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
         return
 
@@ -299,25 +355,127 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    if time is int:
-        embed = certain_week_template(user, player, draft)
+    if week is int:
+        # embed = certain_week_template(user, player, draft)
+        await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
     else:
-        if time is "week":
+        if time == "week":
             embed = weekly_template(user, player, draft)
-        if time is "month":
+        if time == "month":
             embed = monthly_template(user, player, draft)
-        if time is "total":
+        if time == "total":
             embed = total_template(user, player, draft)
 
-    if show is "false":
+    if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
         return
 
     await interaction.response.send_message(embed=embed)
 
 
+@show_team.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="scores", description="Show a teams scores for a certain time or time frame.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_scores(interaction: discord.Interaction, time: Literal["week", "month", "total"], week: int | None, show: bool | None):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+    player = None
+    for p in draft.get_all_players():
+        if p.get_id() == user.id:
+            player = p
+            break
+
+    if player is None:
+        await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
+        return
+
+    if week is int:
+        # embed = certain_week_template(user, player, draft)
+        await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
+    else:
+        if time == "week":
+            embed = weekly_template(user, player, draft)
+        if time == "month":
+            embed = monthly_template(user, player, draft)
+        if time == "total":
+            embed = total_template(user, player, draft)
+
+    if show is False:
+        await interaction.response.send_message(embed, ephemeral=True)
+        return
+
+    await interaction.response.send_message(embed=embed)
+
+
+@show_team.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="overview", description="Shows overview of all players in league and their scoring totals.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def showYearlyScores(interaction: discord.Interaction):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1, 2]):
+        await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+
+@show_team.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="trade", description="Send a trade offer to player.", guild=GUILD_ID)
+async def trade(interaction: discord.Interaction):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+
+"""
+TESTING COMMANDS
+
+TODO REMOVE THESE AFTER FINISHING
+
+"""
+
+
 @client.tree.command(name="testupdate", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draftArtist(interaction: discord.Interaction):
+
     await interaction.response.send_message("Starting weekly artist score update...")
     try:
         if draft is None:
@@ -346,22 +504,8 @@ async def draftArtist(interaction: discord.Interaction):
         await interaction.followup.send(f"Error during weekly update: {e}")
 
 
-@client.tree.command(name="overview", description="Shows overview of all players in league and their scoring totals.", guild=GUILD_ID)
-async def showYearlyScores(interaction: discord.Interaction):
-    if draft.is_stage(0, 1):
-        await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
-        return
-
-    user = interaction.user
-
-
-@client.tree.command(name="trade", description="Send a trade offer to player.", guild=GUILD_ID)
-async def showYearlyScores(interaction: discord.Interaction):
-    if draft.is_stage(0, 1):
-        await interaction.response.send_message("Need to start draft before checking scores", delete_after=10, ephemeral=True)
-        return
-
-    user = interaction.user
-
+@client.tree.command(name="stage", description="Draft artists to fantasy team.", guild=GUILD_ID)
+async def draft_artist(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Draft is at stage {draft.get_stage()}.", delete_after=10, ephemeral=True)
 
 client.run(DISCORD_TOKEN)

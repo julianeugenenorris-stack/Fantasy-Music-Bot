@@ -8,8 +8,7 @@ class Draft:
             rounds: int,
             monthly: float = 0.00000003333,
             change: float | None = None,
-            aoty: float | None = None,
-            aoty_cutoff: float | None = None,
+            aoty: list | None = [50, 25, 15, 10, 5, -5, -25],
             billboard: float | None = None,
             billboard_multiplier: int | None = None,
             billboard_top: int | None = None
@@ -24,9 +23,7 @@ class Draft:
         :param change: How many points will be added as an artists monthly listeners goes up and down.
         :type change: float | None
         :param aoty: How many points will be added for album of the year user scores.
-        :type aoty: float | None
-        :param aoty: How many points will be added for album of the year user scores.
-        :type aoty: float | None
+        :type aoty: list | None
         :param billboard: How many points will be the base for the billboard scoring.
         :type billboard: float | None
         :param billboard_multiplier: The multiplier for each billboard spot up the list.
@@ -49,8 +46,13 @@ class Draft:
 
         self.monthly: float = monthly
         self.change: float | None = change
-        self.aoty: float | None = aoty
-        self.aoty_cutoff: float | None = aoty_cutoff
+
+        self.aoty_scoring_guide = ["90+", "89-85",
+                                   "84-82", "81-79", "78-75", "74-65", "64-"]
+        self.aoty_scoring: list[float] | None = aoty
+        """Shows how much an album scores if it is in the a range of aoty user scores. 7 spots in list. 
+        [if an album gets a 90+ it will be a this, 89 - 85, 84 - 82, 81 - 79, 78 - 75, 74 - 65, and 64 to the min score]"""
+
         self.billboard: float | None = billboard
         self.billboard_multiplier: int | None = billboard_multiplier
         self.billboard_top: int | None = billboard_top
@@ -60,15 +62,16 @@ class Draft:
         self.stage: int = 0
         """0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
 
-        self.draftUpdateTime: list[int] = []
+        self.week_in_season: int = 0
+        self.draft_update_time: list = []
         """weekday - hour - minute"""
 
     def new_settings(self,
                      rounds: int | None = None,
                      monthly: float | None = None,
                      change: float | None = None,
-                     aoty: float | None = None,
-                     aoty_cutoff: float | None = None,
+                     aoty_range: str | None = None,
+                     aoty_score: float | None = None,
                      billboard: float | None = None,
                      billboard_multiplier: int | None = None,
                      billboard_top: int | None = None) -> bool:
@@ -79,10 +82,10 @@ class Draft:
         :type monthly: float
         :param change: How many points will be added as an artists monthly listeners goes up and down.
         :type change: float | None
-        :param aoty: How many points will be added for album of the year user scores.
-        :type aoty: float | None
-        :param aoty: How many points will be added for album of the year user scores.
-        :type aoty: float | None
+        :param aoty_range: The range the user is changing.
+        :type aoty_range: str | None
+        :param aoty_score: What the new score will be in the range.
+        :type aoty_score: float | None
         :param billboard: How many points will be the base for the billboard scoring.
         :type billboard: float | None
         :param billboard_multiplier: The multiplier for each billboard spot up the list.
@@ -96,10 +99,10 @@ class Draft:
             self.monthly = monthly
         if change is not None:
             self.change = change
-        if aoty is not None:
-            self.aoty = aoty
-        if aoty_cutoff is not None:
-            self.aoty_cutoff = aoty_cutoff
+        if aoty_range is not None:
+            if aoty_score is not None:
+                index = self.aoty_scoring_guide.index(aoty_range)
+                self.aoty_scoring[index] = aoty_score
         if billboard is not None:
             self.billboard = billboard
         if billboard_multiplier is not None:
@@ -112,8 +115,8 @@ class Draft:
             "rounds": self.rounds,
             "change": self.change,
             "monthly": self.monthly,
-            "aoty": self.aoty,
-            "aoty_cutoff": self.aoty_cutoff,
+            "aoty": self.aoty_scoring,
+            "aoty_scoring_guide": self.aoty_scoring_guide,
             "billboard": self.billboard,
             "billboard_multiplier": self.billboard_multiplier,
             "billboard_top": self.billboard_top
@@ -126,21 +129,23 @@ class Draft:
         :returns: if it is the current draft stage or not.
         :rtype: boolean
         """
-        if stage is list:
-            if self.stage in stage:
-                return True
-        elif stage is int:
-            if self.stage is stage:
-                return True
-        else:
+        if isinstance(stage, int):
+            return self.stage == stage
+
+        try:
+            return self.stage in stage
+        except TypeError:
             return False
+
+    def get_stage(self,) -> int:
+        return self.stage
 
     def next_stage(self) -> None:
         """Goes to next stage of draft. 0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is overd"""
         if self.stage is 3:
             print("Warning: Season is over.")
 
-        if self.stage > 4:
+        if self.stage > 3:
             print("Error: Max stage limit reached.")
             return
         self.stage += 1
@@ -168,7 +173,13 @@ class Draft:
         return [p for p in self.draft_players if isinstance(p, Player)]
 
     def get_update_time(self):
-        return self.draftUpdateTime
+        return self.draft_update_time
+
+    def get_week_in_season(self):
+        return self.week_in_season
+
+    def set_draft_update_time(self, update_list: list):
+        self.draft_update_time = update_list
 
     def next_turn(self) -> None:
         """Goes to the next player in the draft order"""
@@ -196,7 +207,7 @@ class Draft:
         :param name: The player's discord name.
         :type name: str
         """
-        self.draft_players.append(Player(id=id, name=name))
+        self.draft_players.append(Player(user_id=id, name=name))
 
     def set_all_artists(self, artists: list):
         self.all_artists = artists
@@ -206,11 +217,6 @@ class Draft:
 
     def set_current_listeners(self, listeners: list):
         self.current_listeners = listeners
-
-    def setUpdateTimer(self, weekday, hour, minute):
-        self.draftUpdateTime.append(weekday)
-        self.draftUpdateTime.append(hour)
-        self.draftUpdateTime.append(minute)
 
     def update_weekly_score(self, weekListeners):
         artistIndex = {name: i for i,
@@ -251,3 +257,7 @@ class Draft:
                 scores = player.artist_scores[artist]["weekly"]
                 yearly_total = sum(scores)
                 player.artist_scores[artist]["yearly_total"] = yearly_total
+
+    def end_season():
+        print("End season")
+        return

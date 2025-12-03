@@ -1,3 +1,5 @@
+from urllib.request import Request, urlopen
+import urllib.parse
 from bs4 import BeautifulSoup
 from datetime import datetime
 import requests
@@ -6,7 +8,111 @@ import os
 import glob
 import pickle
 
-scrapeRespectClock = 1  # seconds between requests
+respect_clock = 1  # seconds between requests
+
+
+def get_artist_id(artist_name):
+    """Returns the special character ID for an artist from AlbumOfTheYear.org."""
+    # Replace spaces with "+" for URL
+    query = urllib.parse.quote_plus(artist_name)
+    search_url = f"https://www.albumoftheyear.org/search/?q={query}"
+
+    # Set a browser-like user-agent
+    req = Request(search_url, headers={"User-Agent": "Mozilla/6.0"})
+    page = urlopen(req).read()
+
+    # Parse HTML
+    soup = BeautifulSoup(page, "html.parser")
+
+    # Find the first artist result link
+    # Artist links usually start with "/artist/<id>-<name>/"
+    artist_link = soup.find("a", href=lambda x: x and x.startswith("/artist/"))
+
+    if artist_link:
+        # Extract the part after "/artist/" and before the next "/"
+        href = artist_link['href']
+        artist_id_tag = href.split("/")[2]  # href = "/artist/183-kanye-west/"
+        # artist_id = artist_id_tag.split("-")[0]
+        time.sleep(respect_clock)
+        return artist_id_tag
+    else:
+        return None
+
+
+def get_all_artist_albums(artist_id):
+    """Returns a list of all albums for a given artist ID from AlbumOfTheYear.org.
+    """
+    artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
+
+    req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
+    page = urlopen(req).read()
+
+    soup = BeautifulSoup(page, "html.parser")
+
+    categorized_albums = {}
+    headers = soup.find_all(["h2", "div"])
+    current_category = None
+
+    for header in headers:
+        if header.name == "h2":
+            # New category found, update current_category
+            current_category = header.get_text(strip=True)
+            # Initialize list for this category
+            categorized_albums[current_category] = []
+        elif header.name == "div" and current_category == "Similar Artists":
+            # Similar Artists is structured differently
+            album_title_div = header.find("div", class_="name")
+            if album_title_div:
+                album_name = album_title_div.get_text().encode(
+                    "ascii", "ignore").decode().strip()
+                categorized_albums[current_category].append(album_name)
+        elif header.name == "div" and current_category:
+            # For each category, loop through all divs to find the album title
+            album_title_div = header.find("div", class_="albumTitle")
+            if album_title_div:
+                album_name = album_title_div.get_text().encode(
+                    "ascii", "ignore").decode().strip()
+                categorized_albums[current_category].append(album_name)
+
+    time.sleep(respect_clock)
+    return categorized_albums['Albums']
+
+
+def get_most_recent_album_user_score(artist_id):
+    """
+    Returns the user score of the most recent album for the given artist ID.
+
+    Example:
+    get_most_recent_album_user_score("500-clipse") -> "7.2"
+    """
+    artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
+
+    # Make the request with a browser User-Agent
+    req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
+    page = urlopen(req).read()
+
+    soup = BeautifulSoup(page, "html.parser")
+
+    # Albums are usually listed in a div with class "albumTitle" inside a container
+    album_blocks = soup.find_all("div", class_="albumBlock")
+
+    print(album_blocks)
+
+    if not album_blocks:
+        return None  # No albums found
+
+    # The first album block is usually the most recent
+    most_recent_album = album_blocks[0]
+
+    # User score is in a div with class "albumUserScore"
+    user_score_div = most_recent_album.find_all("div", class_="rating")
+
+    if user_score_div:
+        score = user_score_div[1].get_text(strip=True)
+        time.sleep(respect_clock)
+        return score
+    else:
+        return None  # No user score found
 
 
 def download_pages():
@@ -21,21 +127,17 @@ def download_pages():
 
     if not files:
         print("No page files to delete.")
-        return
 
     for file in files:
         os.remove(file)
         print(f"Deleted {file}")
-
-    if not os.path.exists("database"):
-        os.makedirs("database")
 
     url = "https://kworb.net/spotify/listeners"
     page = 1
 
     # print new
     while True:
-        time.sleep(scrapeRespectClock)
+        time.sleep(respect_clock)
         try:
             page_url = f"{url}{page}.html" if page > 1 else f"{url}.html"
             r = requests.get(page_url)

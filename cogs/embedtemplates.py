@@ -8,15 +8,12 @@ def team_template(user, player, draftClass):
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text="# is current monthly listeners for artists.")
     count = 1
-    for artist_name in player.getArtists():
-        i = draftClass.getArtists().index(artist_name)
-
-        listeners = draftClass.getLeagueStartListeners()[i]
+    for artist_name in player.get_all_artists():
+        i = draftClass.get_all_artists().index(artist_name)
 
         embed.add_field(name=f"{count}:\t{artist_name}",
-                        value=f"{listeners:,}", inline=False)
+                        value=f"#{i + 1} in league ranking", inline=False)
 
         count += 1
 

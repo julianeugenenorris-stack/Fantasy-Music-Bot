@@ -1,12 +1,15 @@
+from cogs.scraper import get_artist_id
+
+
 class Player:
-    def __init__(self, id: int, name: str,):
+    def __init__(self, user_id: int, name: str,):
         """
         :param user_id: The player's discord id.
         :type user_id: int
         :param name: The player's discord name.
         :type name: str
         """
-        self.user_id = id
+        self.user_id = user_id
         self.name = name
 
         self.artists: list = []
@@ -17,6 +20,7 @@ class Player:
                 "weekly": [...],      # raw weekly scores
                 "monthly": [...],     # rolling monthly totals
                 "yearly_total": 0       # accumulated total for the year
+                "id": get_artist_id(name)
             }
         """
 
@@ -38,8 +42,15 @@ class Player:
     def get_id(self):
         return self.user_id
 
-    def addArtist(self, name):
+    def draft_artist(self, name: str):
         self.artists.append(name)
+        self.artist_scores[name] = {
+            "weekly": [],
+            "monthly": [],
+            "yearly_total": 0,
+            "id_aoty": get_artist_id(name.lower())
+        }
+        print(self.artist_scores)
 
     def set_artist(self, name: str, location: int):
         if len(self.artists) >= location:
@@ -50,5 +61,6 @@ class Player:
             self.artist_scores[name] = {
                 "weekly": [],
                 "monthly": [],
-                "yearly_total": 0
+                "yearly_total": 0,
+                "id_aoty": get_artist_id(name.lower())
             }
