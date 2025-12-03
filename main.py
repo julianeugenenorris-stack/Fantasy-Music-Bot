@@ -80,6 +80,8 @@ async def start_draft(interaction: discord.Interaction):
         download_pages()
         update_timestamp()
 
+    draft.next_stage()
+
     websiteArrays = parse_all_pages()
     draft.set_all_artists(websiteArrays[0])
     draft.set_starting_listeners(websiteArrays[1])
@@ -93,14 +95,14 @@ async def start_draft(interaction: discord.Interaction):
     await interaction.followup.send("Draft ready! Starting Draft Lobby.")
 
     # start draft
-    draft.next_stage()
 
     firstPlayer = draft.get_all_players()[0]
     user = await client.fetch_user(firstPlayer.get_id())
-    await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
+    await interaction.followup.send(f"{user.mention} You are on the board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
 
 
 @client.tree.command(name="settings", description="Show settings of the draft.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def settings(interaction: discord.Interaction,
                    action: Literal["get", "set"] = "get",
                    rounds: int | None = None,
@@ -109,9 +111,8 @@ async def settings(interaction: discord.Interaction,
                    aoty_range: Literal["90+", "89-85", "84-82",
                                        "81-79", "78-75", "74-65", "64-"] | None = None,
                    aoty_score: float | None = None,
-                   billboard: float | None = None,
-                   billboard_multiplier: int | None = None,
-                   billboard_top: int | None = None, ):
+                   billboard_score: float | None = None,
+                   billboard_spot: int | None = None, ):
     global draft
 
     if draft is None:
@@ -126,12 +127,20 @@ async def settings(interaction: discord.Interaction,
         return
     if action == "set":
         draft.new_settings(rounds=rounds, monthly=monthly, change=change, aoty_score=aoty_score, aoty_range=aoty_range,
-                           billboard=billboard, billboard_multiplier=billboard_multiplier, billboard_top=billboard_top)
+                           billboard_score=billboard_score, billboard_spot=billboard_spot+1)
         settings = draft.get_settings()
         formatted_string = ", ".join(
             [f"{key}: {value}" for key, value in settings.items()])
         await interaction.response.send_message(F"New settings are:\n{formatted_string}")
         return
+
+
+@settings.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
 
 
 @client.tree.command(name="join", description="Join fantasy draft as a player.", guild=GUILD_ID)

@@ -9,9 +9,7 @@ class Draft:
             monthly: float = 0.00000003333,
             change: float | None = None,
             aoty: list | None = [50, 25, 15, 10, 5, -5, -25],
-            billboard: float | None = None,
-            billboard_multiplier: int | None = None,
-            billboard_top: int | None = None
+            billboard: list | None = [10, 5, 5, 5, 5, 3],
     ) -> None:
         """
         :param name: The name of the league used in graphics.
@@ -24,12 +22,8 @@ class Draft:
         :type change: float | None
         :param aoty: How many points will be added for album of the year user scores.
         :type aoty: list | None
-        :param billboard: How many points will be the base for the billboard scoring.
-        :type billboard: float | None
-        :param billboard_multiplier: The multiplier for each billboard spot up the list.
-        :type billboard_multiplier: int | None
-        :param billboard_top: To what postition to give points. (5 = top 5 artists get points)
-        :type billboard_top: int | None
+        :param billboard: How many points will be scored for the billboard rankings.
+        :type billboard: list | None
         """
 
         self.draft_players: list[str] = []
@@ -41,6 +35,7 @@ class Draft:
         self.direction: int = 1
         self.rounds: int = rounds
 
+        self.all_artists: list[str] = []
         self.starting_listeners: list = None
         self.current_listeners: list = None
 
@@ -49,15 +44,13 @@ class Draft:
 
         self.aoty_scoring_guide = ["90+", "89-85",
                                    "84-82", "81-79", "78-75", "74-65", "64-"]
-        self.aoty_scoring: list[float] | None = aoty
+        self.aoty_scoring: list[float] = aoty
         """Shows how much an album scores if it is in the a range of aoty user scores. 7 spots in list. 
         [if an album gets a 90+ it will be a this, 89 - 85, 84 - 82, 81 - 79, 78 - 75, 74 - 65, and 64 to the min score]"""
 
-        self.billboard: float | None = billboard
-        self.billboard_multiplier: int | None = billboard_multiplier
-        self.billboard_top: int | None = billboard_top
-
-        self.all_artists: list[str] = []
+        self.billboard: list[float] = billboard
+        """How many points having a song in the top billboard will get you. 
+        [#1 -> #100] based on index. Last spot will be used for every spot down the list."""
 
         self.stage: int = 0
         """0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
@@ -72,9 +65,8 @@ class Draft:
                      change: float | None = None,
                      aoty_range: str | None = None,
                      aoty_score: float | None = None,
-                     billboard: float | None = None,
-                     billboard_multiplier: int | None = None,
-                     billboard_top: int | None = None) -> bool:
+                     billboard_score: float | None = None,
+                     billboard_spot: int | None = None) -> bool:
         """
         :param rounds: Number of rounds in the draft.
         :type rounds: int
@@ -86,12 +78,10 @@ class Draft:
         :type aoty_range: str | None
         :param aoty_score: What the new score will be in the range.
         :type aoty_score: float | None
-        :param billboard: How many points will be the base for the billboard scoring.
-        :type billboard: float | None
-        :param billboard_multiplier: The multiplier for each billboard spot up the list.
-        :type billboard_multiplier: int | None
-        :param billboard_top: To what postition to give points. (5 = top 5 artists get points)
-        :type billboard_top: int | None
+        :param billboard_score: How many points will be the base for the billboard scoring.
+        :type billboard_score: float | None
+        :param billboard_spot: What spot is it in the list.
+        :type billboard_spot: int | None
         """
         if rounds is not None:
             self.rounds = rounds
@@ -103,12 +93,9 @@ class Draft:
             if aoty_score is not None:
                 index = self.aoty_scoring_guide.index(aoty_range)
                 self.aoty_scoring[index] = aoty_score
-        if billboard is not None:
-            self.billboard = billboard
-        if billboard_multiplier is not None:
-            self.billboard_multiplier = billboard_multiplier
-        if billboard_top is not None:
-            self.monthly = billboard_top
+        if billboard_score is not None:
+            if billboard_spot is not None:
+                self.billboard[billboard_spot] = billboard_score
 
     def get_settings(self) -> list:
         return {
@@ -117,9 +104,7 @@ class Draft:
             "monthly": self.monthly,
             "aoty": self.aoty_scoring,
             "aoty_scoring_guide": self.aoty_scoring_guide,
-            "billboard": self.billboard,
-            "billboard_multiplier": self.billboard_multiplier,
-            "billboard_top": self.billboard_top
+            "billboard": self.billboard
         }
 
     def is_stage(self, stage: int | list) -> bool:
