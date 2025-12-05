@@ -49,15 +49,15 @@ class Player:
 
     def draft_artist(self, name: str):
         self.artists.append(name)
+        id = get_artist_id(name.lower())
         self.artist_info[name] = {
             "weekly": [],
             "monthly": [],
             "yearly_total": 0,
-            "id_aoty": get_artist_id(name.lower()),
-            "albums_on_record": get_all_artist_albums(),
+            "id_aoty": id,
+            "albums_on_record": get_all_artist_albums(id),
             "picked": True
         }
-        print(self.artist_info)
 
     def set_artist(self, name: str, location: int):
         if len(self.artists) >= location:
@@ -65,11 +65,12 @@ class Player:
 
     def ensure_artist(self, name):
         if name not in self.artist_info:
+            id = get_artist_id(name.lower())
             self.artist_info[name] = {
                 "weekly": [],
                 "monthly": [],
                 "yearly_total": 0,
-                "id_aoty": get_artist_id(name.lower()),
-                "albums_on_record": get_all_artist_albums(),
+                "id_aoty": id,
+                "albums_on_record": get_all_artist_albums(id),
                 "picked": True
             }

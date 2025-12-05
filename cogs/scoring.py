@@ -20,7 +20,17 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
         minute_timer = minute
 
         draft.set_draft_update_time([day, hour, minute])
+        print("starting season")
         draft.next_stage()
+
+        await interaction.followup.send("Starting first weekly update. Don't send commands till it is finished...")
+        await update_draft(draft, interaction)
+        await update_score(draft, interaction)
+        await save_changes(draft, interaction)
+        await interaction.followup.send("League update is completed! Starting season...")
+
+        for p in draft.get_all_players():
+            save_object(p, f"player{p.get_id()}.txt")
 
     while True:
         now = datetime.now()
@@ -48,7 +58,7 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
             f"Weekly update scheduled at {run_next_time}. Sleeping for {sleep} seconds.")
         await asyncio.sleep(sleep)
 
-        await interaction.response.send_message("Starting weekly league update. Please don't use any commands during the update...")
+        await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
         await update_draft(draft, interaction)
         await update_score(draft, interaction)
         await save_changes(draft, interaction)
@@ -71,15 +81,16 @@ async def update_draft(draft: Draft, interaction):
         # Update league (draft) info
 
         await interaction.followup.send("Downloading latest artists and listeners...")
-        download_pages()
 
-        websiteArrays = parse_all_pages()
-        draft.set_all_artists(websiteArrays[0])
-        draft.set_current_listeners(websiteArrays[1])
+        await interaction.followup.send("Downloading artists and listeners...")
+        website_arrays = get_full_artists_data()
+
+        draft.next_stage()
+        draft.set_all_artists(website_arrays[0])
 
         draft.week_in_season += 1
 
-        draft.update_weekly_listeners(websiteArrays[1])
+        draft.update_weekly_listeners(website_arrays[1])
         draft.update_monthly_listeners()
         draft.update_total_listeners()
 

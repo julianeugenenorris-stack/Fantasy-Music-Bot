@@ -11,7 +11,7 @@ import pickle
 respect_clock = 1  # seconds between requests
 
 
-async def get_artist_id(artist_name):
+def get_artist_id(artist_name):
     time.sleep(respect_clock)
     """Returns the special character ID for an artist from AlbumOfTheYear.org."""
     # Replace spaces with "+" for URL
@@ -19,8 +19,12 @@ async def get_artist_id(artist_name):
     search_url = f"https://www.albumoftheyear.org/search/?q={query}"
 
     # Set a browser-like user-agent
-    req = Request(search_url, headers={"User-Agent": "Mozilla/6.0"})
-    page = urlopen(req).read()
+    try:
+        req = Request(search_url, headers={"User-Agent": "Mozilla/6.0"})
+        page = urlopen(req).read()
+    except Exception as e:
+        print(f"Error getting aoty id: {e}")
+        return None
 
     # Parse HTML
     soup = BeautifulSoup(page, "html.parser")
@@ -45,8 +49,12 @@ def get_all_artist_albums(artist_id):
     """
     artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
 
-    req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
-    page = urlopen(req).read()
+    try:
+        req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
+        page = urlopen(req).read()
+    except Exception as e:
+        print(f"Error getting aoty albums: {e}")
+        return []
 
     soup = BeautifulSoup(page, "html.parser")
 
@@ -89,8 +97,12 @@ def get_most_recent_album_user_score(artist_id):
     artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
 
     # Make the request with a browser User-Agent
-    req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
-    page = urlopen(req).read()
+    try:
+        req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
+        page = urlopen(req).read()
+    except Exception as e:
+        print(f"Error getting aoty user score: {e}")
+        return 0
 
     soup = BeautifulSoup(page, "html.parser")
 
@@ -193,6 +205,50 @@ def parse_all_pages():
 
     lists = [artists, listeners]
     return lists
+
+
+def get_full_artists_data():
+    url = "https://kworb.net/spotify/listeners"
+    page = 1
+    pages = []
+
+    while True:
+        time.sleep(respect_clock)
+        try:
+            page_url = f"{url}{page}.html" if page > 1 else f"{url}.html"
+            r = requests.get(page_url)
+            r.raise_for_status()
+        except requests.exceptions.RequestException:
+            print(f"No more pages found. Total pages downloaded: {page-1}")
+            break
+
+        soup = BeautifulSoup(r.content, "html.parser")
+
+        pages.append(soup)
+
+        print(f"Downloaded page {page}")
+        page += 1
+
+    artists = []
+    listeners = []
+    count = 1
+
+    for soup in pages:
+        rows = soup.select("tbody tr")
+        if not rows:
+            continue
+
+        for row in rows:
+            name_cell = row.select_one(".text")
+            tds = row.find_all("td")
+            if not name_cell or len(tds) < 3:
+                continue
+
+            count += 1
+            artists.append(name_cell.text.strip())
+            listeners.append(int(tds[2].text.replace(",", "")))
+
+    return [artists, listeners]
 
 
 def write_list_to_file(data, filename):

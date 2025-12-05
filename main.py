@@ -75,19 +75,15 @@ async def start_draft(interaction: discord.Interaction):
 
     await interaction.response.send_message("Starting draft...")
 
-    if not cache_is_current():
-        await interaction.followup.send("Downloading artists and listeners.")
-        download_pages()
-        update_timestamp()
+    await interaction.followup.send("Downloading artists and listeners...")
+    website_arrays = get_full_artists_data()
 
     draft.next_stage()
+    draft.set_all_artists(website_arrays[0])
+    draft.set_starting_listeners(website_arrays[1])
 
-    websiteArrays = parse_all_pages()
-    draft.set_all_artists(websiteArrays[0])
-    draft.set_starting_listeners(websiteArrays[1])
-
-    draftName = f"draft{draft.get_name()}"
-    save_object(draft, draftName)
+    draft_name = f"draft{draft.get_name()}"
+    save_object(draft, draft_name)
 
     for p in draft.get_all_players():
         save_object(p, f"player{p.get_id()}.txt")
@@ -165,8 +161,8 @@ async def join(interaction: discord.Interaction):
 
     draft.add_new_player(user.id, user.name)
 
-    draftName = f"draft{draft.get_name()}"
-    save_object(draft, draftName)
+    draft_name = f"draft{draft.get_name()}"
+    save_object(draft, draft_name)
 
     await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
 
@@ -196,16 +192,14 @@ async def start_season(interaction: discord.Interaction, day: int, hour: int, mi
     await interaction.response.send_message(f"Starting {draft.get_name()}'s fantasy season.")
 
     # start season
-
-    draftName = f"draft{draft.get_name()}"
-    save_object(draft, draftName)
     client.loop.create_task(weekly_update(
         draft, interaction, day=day, hour=hour, minute=minute))
 
 
 @client.tree.command(name="draft", description="Draft artists to fantasy team.", guild=GUILD_ID)
 @commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
-async def draft_artist(interaction: discord.Interaction, artist_selected: str):
+async def draft_artist(interaction: discord.Interaction, artist_name: str):
+    artist_selected = artist_name
     try:
         if draft.is_stage(0):
             await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
@@ -230,7 +224,7 @@ async def draft_artist(interaction: discord.Interaction, artist_selected: str):
                 player = draft.get_all_players()[draft.get_turn()]
 
                 if artist_selected in draft.drafted_artists:
-                    await interaction.response.send_message(f"{artist_selected} has already been drafted.\nDraft someone else.", delete_after=10, ephemeral=True)
+                    await interaction.response.send_message(f"{artist_selected} has already been drafted. Draft another artist.", delete_after=10, ephemeral=True)
                     return
 
                 await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
@@ -243,14 +237,14 @@ async def draft_artist(interaction: discord.Interaction, artist_selected: str):
                     nextPlayer = draft.get_all_players()[draft.get_turn()]
                     user = await client.fetch_user(nextPlayer.get_id())
 
-                    draftName = f"draft{draft.get_name()}"
-                    save_object(draft, draftName)
+                    draft_name = f"draft{draft.get_name()}"
+                    save_object(draft, draft_name)
 
                     await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
                     return
                 else:
-                    draftName = f"draft{draft.get_name()}"
-                    save_object(draft, draftName)
+                    draft_name = f"draft{draft.get_name()}"
+                    save_object(draft, draft_name)
 
                     await interaction.followup.send("Draft Completed.")
                     return
@@ -342,6 +336,46 @@ async def mycommand_error(ctx, error):
         raise error
 
 
+@client.tree.command(name="albums", description="Show all albums for each artist.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_listeners(interaction: discord.Interaction, show: bool | None):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message("Need to finish draft before checking albums", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+    player = None
+    for p in draft.get_all_players():
+        if p.get_id() == user.id:
+            player = p
+            break
+
+    if player is None:
+        await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
+        return
+
+    embed = artists_albums_template(user, player)
+
+    if show is False:
+        await interaction.response.send_message(embed, ephemeral=True)
+        return
+
+    await interaction.response.send_message(embed=embed)
+
+
+@show_team.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
 @client.tree.command(name="listeners", description="Show a teams listeners for a certain time or time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def show_listeners(interaction: discord.Interaction, time: Literal["week", "month", "total"], week: int | None, show: bool | None):
@@ -349,7 +383,7 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
 
-    if draft.is_stage([0, 1]):
+    if draft.is_stage([0, 1, 2]):
         await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
         return
 
@@ -370,11 +404,11 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
         await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
     else:
         if time == "week":
-            embed = weekly_template(user, player, draft)
+            embed = weekly_listeners_template(user, player, draft)
         if time == "month":
-            embed = monthly_template(user, player, draft)
+            embed = monthly_listeners_template(user, player, draft)
         if time == "total":
-            embed = total_template(user, player, draft)
+            embed = total_listeners_template(user, player, draft)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -398,8 +432,8 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
 
-    if draft.is_stage([0, 1]):
-        await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
+    if draft.is_stage([0, 1, 2]):
+        await interaction.response.send_message("Need to finish draft and start season before checking scores", delete_after=10, ephemeral=True)
         return
 
     user = interaction.user
@@ -419,11 +453,11 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
     else:
         if time == "week":
-            embed = weekly_template(user, player, draft)
+            embed = weekly_scores_template(user, player, draft)
         if time == "month":
-            embed = monthly_template(user, player, draft)
+            embed = monthly_scores_template(user, player, draft)
         if time == "total":
-            embed = total_template(user, player, draft)
+            embed = total_scores_template(user, player, draft)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -492,24 +526,12 @@ async def draftArtist(interaction: discord.Interaction):
             await interaction.followup.send("No draft loaded, skipping update.")
             return
 
-        await interaction.followup.send("Downloading latest artists and listeners...")
-        download_pages()
+        await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
+        await update_draft(draft, interaction)
+        await update_score(draft, interaction)
+        await save_changes(draft, interaction)
+        await interaction.followup.send("League update is completed!")
 
-        websiteArrays = parse_all_pages()
-        draft.set_all_artists(websiteArrays[0])
-        draft.set_current_listeners(websiteArrays[1])
-
-        draftName = f"draft{draft.get_name()}"
-        save_object(draft, draftName)
-
-        draft.update_weekly_listeners(websiteArrays[1])
-        draft.update_monthly_listeners()
-        draft.update_total_listeners()
-
-        for p in draft.get_all_players():
-            save_object(p, f"player{p.get_id()}.txt")
-
-        await interaction.followup.send("Weekly update completed!")
     except Exception as e:
         await interaction.followup.send(f"Error during weekly update: {e}")
 
