@@ -48,23 +48,27 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
             f"Weekly update scheduled at {run_next_time}. Sleeping for {sleep} seconds.")
         await asyncio.sleep(sleep)
 
-        await update(draft, interaction)
+        await interaction.response.send_message("Starting weekly league update. Please don't use any commands during the update...")
+        await update_draft(draft, interaction)
+        await update_score(draft, interaction)
+        await save_changes(draft, interaction)
+        await interaction.followup.send("League update is completed!")
 
         if draft.get_week_in_season() >= season_week_length:
             # Season is over → finalize
-            await interaction.send("Season has ended. Finalizing results...")
+            await interaction.followup.send("Season has ended. Finalizing results.")
             draft.next_stage()
             draft.end_season()
             break
 
 
-async def update(draft: Draft, interaction):
-    await interaction.response.send_message("Starting weekly artist score update...")
-
+async def update_draft(draft: Draft, interaction):
     try:
         if draft is None:
             await interaction.followup.send("No draft loaded, skipping update.")
             return
+
+        # Update league (draft) info
 
         await interaction.followup.send("Downloading latest artists and listeners...")
         download_pages()
@@ -75,16 +79,40 @@ async def update(draft: Draft, interaction):
 
         draft.week_in_season += 1
 
-        draft.update_weekly_score(websiteArrays[1])
-        draft.update_monthly_score()
-        draft.update_total_score()
+        draft.update_weekly_listeners(websiteArrays[1])
+        draft.update_monthly_listeners()
+        draft.update_total_listeners()
 
+        await interaction.followup.send("Weekly league information loaded...")
+    except Exception as e:
+        await interaction.followup.send(f"Error during weekly update: {e}")
+
+
+async def update_score(draft: Draft, interaction):
+    try:
+        if draft is None:
+            await interaction.followup.send("No draft loaded, skipping scoring update.")
+            return
+
+        await interaction.followup.send("Weekly scores updated...")
+    except Exception as e:
+        await interaction.followup.send(f"Error during weekly score update: {e}")
+
+
+async def save_changes(draft: Draft, interaction):
+    try:
+        if draft is None:
+            await interaction.followup.send("No draft loaded, skipping saving update.")
+            return
+
+        await interaction.followup.send("Saving changes ...")
         draftName = f"draft{draft.get_name()}"
+
         save_object(draft, draftName)
 
         for p in draft.get_all_players():
             save_object(p, f"player{p.get_id()}.txt")
 
-        await interaction.followup.send("Weekly update completed!")
+            await interaction.followup.send("Changes saved!")
     except Exception as e:
-        await interaction.followup.send(f"Error during weekly update: {e}")
+        await interaction.followup.send(f"Error during saving: {e}")

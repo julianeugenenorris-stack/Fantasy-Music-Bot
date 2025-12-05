@@ -36,6 +36,7 @@ class Draft:
         self.rounds: int = rounds
 
         self.all_artists: list[str] = []
+        self.drafted_artists: set = set()
         self.starting_listeners: list = None
         self.current_listeners: list = None
 
@@ -194,6 +195,9 @@ class Draft:
         """
         self.draft_players.append(Player(user_id=id, name=name))
 
+    def add_drafted_artists(self, artist_name):
+        self.drafted_artists.add(artist_name)
+
     def set_all_artists(self, artists: list):
         self.all_artists = artists
 
@@ -203,7 +207,7 @@ class Draft:
     def set_current_listeners(self, listeners: list):
         self.current_listeners = listeners
 
-    def update_weekly_score(self, weekListeners):
+    def update_weekly_listeners(self, weekly_listener_data):
         artistIndex = {name: i for i,
                        name in enumerate(self.get_all_artists())}
 
@@ -214,34 +218,39 @@ class Draft:
                 player.ensure_artist(artist)
 
                 idx = artistIndex.get(artist, None)
-                score = weekListeners[idx] if idx is not None else 0
+                listeners = weekly_listener_data[idx] if idx is not None else 0
 
-                # log weekly score
-                player.artist_scores[artist]["weekly"].append(score)
-                weekly_total += score
+                # log weekly listeners
+                player.artist_info[artist]["weekly"].append(listeners)
+                weekly_total += listeners
 
-            player.weekly_score = weekly_total
-            player.total_score += weekly_total
+            player.weekly_listeners = weekly_total
+            player.total_listeners += weekly_total
 
-    def update_monthly_score(self):
+    def update_monthly_listeners(self):
         for player in self.get_all_players():
 
             for artist in player.artists:
-                scores = player.artist_scores[artist]["weekly"]
+                listeners = player.artist_info[artist]["weekly"]
                 player.ensure_artist(artist)
 
                 # last 4 weeks = "month"
-                recent = scores[-4:]
+                recent = listeners[-4:]
 
                 monthly_total = sum(recent)
-                player.artist_scores[artist]["monthly"].append(monthly_total)
+                player.artist_info[artist]["monthly"].append(monthly_total)
 
-    def update_total_score(self):
+    def update_total_listeners(self):
         for player in self.get_all_players():
             for artist in player.artists:
-                scores = player.artist_scores[artist]["weekly"]
-                yearly_total = sum(scores)
-                player.artist_scores[artist]["yearly_total"] = yearly_total
+                listeners = player.artist_info[artist]["weekly"]
+                yearly_total = sum(listeners)
+                player.artist_info[artist]["yearly_total"] = yearly_total
+
+    def score_all_players(self):
+        for player in self.get_all_players():
+            return
+        return
 
     def end_season():
         print("End season")

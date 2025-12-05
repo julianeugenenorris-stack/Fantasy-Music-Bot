@@ -205,7 +205,7 @@ async def start_season(interaction: discord.Interaction, day: int, hour: int, mi
 
 @client.tree.command(name="draft", description="Draft artists to fantasy team.", guild=GUILD_ID)
 @commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
-async def draft_artist(interaction: discord.Interaction, message: str):
+async def draft_artist(interaction: discord.Interaction, artist_selected: str):
     try:
         if draft.is_stage(0):
             await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
@@ -225,16 +225,17 @@ async def draft_artist(interaction: discord.Interaction, message: str):
         return
 
     if draft.get_all_players()[draft.get_turn()].get_id() == user.id:
-        for a in draft.get_all_artists():
-            if a == message:
+        for artist in draft.get_all_artists():
+            if artist_selected == artist:
                 player = draft.get_all_players()[draft.get_turn()]
 
-                if a in player.get_all_artists():
-                    await interaction.response.send_message(f"You have already drafted {a}.\nDraft someone else.", delete_after=10, ephemeral=True)
+                if artist_selected in draft.drafted_artists:
+                    await interaction.response.send_message(f"{artist_selected} has already been drafted.\nDraft someone else.", delete_after=10, ephemeral=True)
                     return
 
-                await interaction.response.send_message(f"{user.name} has drafted {a}!")
-                player.draft_artist(a)
+                await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
+                player.draft_artist(artist_selected)
+                draft.add_drafted_artists(artist_selected)
 
                 draft.next_turn()
 
@@ -253,7 +254,7 @@ async def draft_artist(interaction: discord.Interaction, message: str):
 
                     await interaction.followup.send("Draft Completed.")
                     return
-        await interaction.response.send_message(f"The artist {message} is not in the draft pool.", delete_after=10, ephemeral=True)
+        await interaction.response.send_message(f"The artist {artist_selected} is not in the draft pool.", delete_after=10, ephemeral=True)
         return
     else:
         await interaction.response.send_message("It is not your turn.", delete_after=10, ephemeral=True)
@@ -441,7 +442,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="overview", description="Shows overview of all players in league and their scoring totals.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def showYearlyScores(interaction: discord.Interaction):
+async def show_overview(interaction: discord.Interaction):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -501,9 +502,9 @@ async def draftArtist(interaction: discord.Interaction):
         draftName = f"draft{draft.get_name()}"
         save_object(draft, draftName)
 
-        draft.update_weekly_score(websiteArrays[1])
-        draft.update_monthly_score()
-        draft.update_total_score()
+        draft.update_weekly_listeners(websiteArrays[1])
+        draft.update_monthly_listeners()
+        draft.update_total_listeners()
 
         for p in draft.get_all_players():
             save_object(p, f"player{p.get_id()}.txt")

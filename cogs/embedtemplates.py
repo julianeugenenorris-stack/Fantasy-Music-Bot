@@ -1,7 +1,9 @@
 import discord
+from cogs.player import Player
+from cogs.draft import Draft
 
 
-def team_template(user, player, draftClass):
+def team_template(user, player: Player, draftClass: Draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team",
         color=discord.Color.blue(),
@@ -10,10 +12,12 @@ def team_template(user, player, draftClass):
     embed.set_thumbnail(url=user.display_avatar.url)
     count = 1
     for artist_name in player.get_all_artists():
-        i = draftClass.get_all_artists().index(artist_name)
+        top_ranking = draftClass.get_all_artists().index(artist_name) + 1
 
         embed.add_field(name=f"{count}:\t{artist_name}",
-                        value=f"#{i + 1} in league ranking", inline=False)
+                        value=f"Picked at #{player.get_all_artists().index(artist_name) + 1}. Ranked {top_ranking} in league ranking"
+                        if player.get_artist(artist_name)["picked"] else
+                        f"Artist was picked up. Ranked {top_ranking} in league ranking", inline=False)
 
         count += 1
 

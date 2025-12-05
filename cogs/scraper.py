@@ -11,7 +11,8 @@ import pickle
 respect_clock = 1  # seconds between requests
 
 
-def get_artist_id(artist_name):
+async def get_artist_id(artist_name):
+    time.sleep(respect_clock)
     """Returns the special character ID for an artist from AlbumOfTheYear.org."""
     # Replace spaces with "+" for URL
     query = urllib.parse.quote_plus(artist_name)
@@ -33,13 +34,13 @@ def get_artist_id(artist_name):
         href = artist_link['href']
         artist_id_tag = href.split("/")[2]  # href = "/artist/183-kanye-west/"
         # artist_id = artist_id_tag.split("-")[0]
-        time.sleep(respect_clock)
         return artist_id_tag
     else:
         return None
 
 
 def get_all_artist_albums(artist_id):
+    time.sleep(respect_clock)
     """Returns a list of all albums for a given artist ID from AlbumOfTheYear.org.
     """
     artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
@@ -74,11 +75,11 @@ def get_all_artist_albums(artist_id):
                     "ascii", "ignore").decode().strip()
                 categorized_albums[current_category].append(album_name)
 
-    time.sleep(respect_clock)
     return categorized_albums['Albums']
 
 
 def get_most_recent_album_user_score(artist_id):
+    time.sleep(respect_clock)
     """
     Returns the user score of the most recent album for the given artist ID.
 
@@ -109,7 +110,6 @@ def get_most_recent_album_user_score(artist_id):
 
     if user_score_div:
         score = user_score_div[1].get_text(strip=True)
-        time.sleep(respect_clock)
         return score
     else:
         return None  # No user score found
