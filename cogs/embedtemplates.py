@@ -384,7 +384,7 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             if new_album_name is not "":
                 embed.add_field(
                     name=f"{artist_name}:",
-                    value=f"New Album: {new_album_name}\nAoty User Score: {new_album_score}\nWeekly Album Score: {new_album_aoty_score}",
+                    value=f"New Album: {new_album_name}\nAoty User Score: {new_album_aoty_score}\nWeekly Album Score: {new_album_score}",
                     inline=False
                 )
             else:

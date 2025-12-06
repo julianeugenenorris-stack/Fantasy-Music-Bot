@@ -579,7 +579,7 @@ TODO REMOVE THESE AFTER FINISHING
 
 
 @client.tree.command(name="testupdate", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction):
+async def draftArtist(interaction: discord.Interaction, update: bool):
 
     await interaction.response.send_message("Starting weekly artist score update...")
     try:
@@ -588,7 +588,8 @@ async def draftArtist(interaction: discord.Interaction):
             return
 
         await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
-        await update_draft(draft, interaction)
+        if update:
+            await update_draft(draft, interaction)
         await update_score(draft, interaction)
         await save_changes(draft, interaction)
         await interaction.followup.send("League update is completed!")
@@ -618,6 +619,15 @@ async def draftArtist(interaction: discord.Interaction, artist: str):
         player_info: list = player.get_artists_information()[
             artist]["albums_on_record"]
         player_info.remove(player_info[0])
+    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
+
+
+@client.tree.command(name="aotyscoring", description="Draft artists to fantasy team.", guild=GUILD_ID)
+async def draftArtist(interaction: discord.Interaction, artist: str):
+    player_info = None
+    for player in draft.get_all_players():
+        player_info = player.get_aoty_score()
+    print(f"{str(draft.get_aoty_scoring())}: Total scoring: {player_info}")
     await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
 
 

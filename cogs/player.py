@@ -61,6 +61,9 @@ class Player:
     def get_weekly_listeners(self):
         return self.weekly_listeners
 
+    def get_aoty_score(self):
+        return self.aoty_score
+
     def get_id(self):
         return self.user_id
 
@@ -86,7 +89,8 @@ class Player:
             "week_billboard_score": 0,
             "songs_on_billboard": [],
             "starting_listeners": None,
-            "total_score_change": 0
+            "total_score_change": 0,
+            "matchup_total_score": 0
         }
 
     def set_billboard_score(self, score: int):

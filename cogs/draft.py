@@ -164,6 +164,9 @@ class Draft:
     def get_round(self):
         return self.rounds
 
+    def get_aoty_scoring(self):
+        return self.aoty_scoring
+
     def get_all_players(self):
         return [p for p in self.draft_players if isinstance(p, Player)]
 
@@ -313,25 +316,30 @@ class Draft:
                     info["new_album_name"] = current_albums[0]
                     album_score = get_most_recent_album_user_score(
                         info["id_aoty"])
+                    album_score = int(album_score)
                     info["new_album_aoty_score"] = album_score
 
                     for index, score_range in enumerate(self.aoty_scoring_guide):
-                        if index == 0:
-                            info["new_album_score"] = int(
-                                self.aoty_scoring[index])
-                            player.add_aoty_score(
-                                int(self.aoty_scoring[index]))
-                            break
-                        if index == len(self.aoty_scoring_guide) - 1:
-                            info["new_album_score"] = int(
-                                self.aoty_scoring[index])
-                            print(f"new score: {info["new_album_score"]}")
-                            player.add_aoty_score(
-                                int(self.aoty_scoring[index]))
-                            break
+                        # Case 1: "90+"
+                        if score_range.endswith("+"):
+                            min_val = int(score_range[:-1])
+                            if album_score >= min_val:
+                                info["new_album_score"] = self.aoty_scoring[index]
+                                player.add_aoty_score(self.aoty_scoring[index])
+                                break
+
+                        # Case 2: "64-"
+                        elif score_range.endswith("-"):
+                            max_val = int(score_range[:-1])
+                            if album_score <= max_val:
+                                info["new_album_score"] = self.aoty_scoring[index]
+                                player.add_aoty_score(self.aoty_scoring[index])
+                                break
+
+                        # Case 3: mid-range "89-85"
                         else:
-                            start, end = score_range.split("-")
-                            if int(start) >= album_score >= int(end):
+                            start, end = map(int, score_range.split("-"))
+                            if start >= album_score >= end:
                                 info["new_album_score"] = self.aoty_scoring[index]
                                 player.add_aoty_score(self.aoty_scoring[index])
                                 break
