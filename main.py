@@ -81,6 +81,7 @@ async def start_draft(interaction: discord.Interaction):
     draft.next_stage()
     draft.set_all_artists(website_arrays[0])
     draft.set_starting_listeners(website_arrays[1])
+    draft.set_current_listeners(website_arrays[1])
 
     draft_name = f"draft{draft.get_name()}"
     save_object(draft, draft_name)
@@ -336,9 +337,78 @@ async def mycommand_error(ctx, error):
         raise error
 
 
-@client.tree.command(name="albums", description="Show all albums for each artist.", guild=GUILD_ID)
+@client.tree.command(name="billboard", description="Show a players team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_listeners(interaction: discord.Interaction, show: bool | None):
+async def show_artist(interaction: discord.Interaction, show: bool | None = True):
+    global draft
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft use.")
+        return
+
+    await interaction.response.defer(thinking=True)
+    embeds = billboard_template(draft)
+
+    if embeds is None:
+        await interaction.followup.send("No information available.")
+        return
+
+    if not isinstance(embeds, list):
+        embeds = [embeds]
+
+    if show is False:
+        await interaction.followup.send(embeds=embeds, ephemeral=True)
+        return
+
+    await interaction.followup.send(embeds=embeds)
+
+
+@draft_artist.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="artistinfo", description="Show a players team.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_artist(interaction: discord.Interaction, artist_name: str, show: bool | None = True):
+    global draft
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft use.")
+        return
+
+    if artist_name in draft.get_all_artists():
+        await interaction.response.defer(thinking=True)
+        embed = artists_info_template(artist_name, draft)
+    else:
+        await interaction.response.send_message(content="This artist is not in the artist pool or has less than 500,000 monthly listeners", delete_after=10, ephemeral=True)
+        return
+
+    if show is False:
+        if embed is None:
+            await interaction.followup.send(content="No information available for this artist.", ephemeral=True)
+        else:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        return
+
+    if embed is None:
+        await interaction.followup.send(content="No information available for this artist.")
+    else:
+        await interaction.followup.send(embed=embed)
+
+
+@draft_artist.error
+async def mycommand_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="albums", description="Show all albums for each artist on team.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_album(interaction: discord.Interaction, show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return

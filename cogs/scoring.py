@@ -105,6 +105,22 @@ async def update_score(draft: Draft, interaction):
             await interaction.followup.send("No draft loaded, skipping scoring update.")
             return
 
+        await interaction.followup.send("Scoring Billboard Hot 100...")
+        draft.score_billboard()
+        await interaction.followup.send("Scoring Billboard Hot 100 completed!")
+
+        await interaction.followup.send("Scoring Last Aoty Albums...")
+        draft.score_aoty()
+        await interaction.followup.send("Scoring Last Aoty Albums completed!")
+
+        await interaction.followup.send("Scoring Change In listeners...")
+        draft.score_change()
+        await interaction.followup.send("Scoring Change In Listeners completed!")
+
+        await interaction.followup.send("Scoring Change In listeners...")
+        draft.score_listeners()
+        await interaction.followup.send("Scoring Change In Listeners completed!")
+
         await interaction.followup.send("Weekly scores updated...")
     except Exception as e:
         await interaction.followup.send(f"Error during weekly score update: {e}")

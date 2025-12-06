@@ -1,4 +1,5 @@
 from cogs.player import Player
+from cogs.scraper import *
 
 
 class Draft:
@@ -9,7 +10,8 @@ class Draft:
             monthly: float = 0.00000003333,
             change: float | None = None,
             aoty: list | None = [50, 25, 15, 10, 5, -5, -25],
-            billboard: list | None = [10, 5, 5, 5, 5, 3],
+            billboard_scoring: list | None = [
+                10, 5, 5, 5, 5, 3, 3, 3, 3, 3, 1.5],
     ) -> None:
         """
         :param name: The name of the league used in graphics.
@@ -22,8 +24,8 @@ class Draft:
         :type change: float | None
         :param aoty: How many points will be added for album of the year user scores.
         :type aoty: list | None
-        :param billboard: How many points will be scored for the billboard rankings.
-        :type billboard: list | None
+        :param billboard_scoring: How many points will be scored for the billboard_scoring rankings.
+        :type billboard_scoring: list | None
         """
 
         self.draft_players: list[str] = []
@@ -49,10 +51,11 @@ class Draft:
         """Shows how much an album scores if it is in the a range of aoty user scores. 7 spots in list. 
         [if an album gets a 90+ it will be a this, 89 - 85, 84 - 82, 81 - 79, 78 - 75, 74 - 65, and 64 to the min score]"""
 
-        self.billboard: list[float] = billboard
-        """How many points having a song in the top billboard will get you. 
+        self.billboard_scoring: list[float] = billboard_scoring
+        """How many points having a song in the top billboard_scoring will get you. 
         [#1 -> #100] based on index. Last spot will be used for every spot down the list."""
 
+        self.billboard_current_songs: list = []
         self.stage: int = 0
         """0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
 
@@ -79,7 +82,7 @@ class Draft:
         :type aoty_range: str | None
         :param aoty_score: What the new score will be in the range.
         :type aoty_score: float | None
-        :param billboard_score: How many points will be the base for the billboard scoring.
+        :param billboard_score: How many points will be the base for the billboard_scoring scoring.
         :type billboard_score: float | None
         :param billboard_spot: What spot is it in the list.
         :type billboard_spot: int | None
@@ -96,7 +99,7 @@ class Draft:
                 self.aoty_scoring[index] = aoty_score
         if billboard_score is not None:
             if billboard_spot is not None:
-                self.billboard[billboard_spot] = billboard_score
+                self.billboard_scoring[billboard_spot] = billboard_score
 
     def get_settings(self) -> list:
         return {
@@ -105,7 +108,7 @@ class Draft:
             "monthly": self.monthly,
             "aoty": self.aoty_scoring,
             "aoty_scoring_guide": self.aoty_scoring_guide,
-            "billboard": self.billboard
+            "billboard_scoring": self.billboard_scoring
         }
 
     def is_stage(self, stage: int | list) -> bool:
@@ -145,6 +148,12 @@ class Draft:
 
     def get_name(self):
         return self.draft_name
+
+    def get_billboard_current_songs(self):
+        return self.billboard_current_songs
+
+    def get_current_listeners(self):
+        return self.current_listeners
 
     def get_all_artists(self):
         return self.all_artists
@@ -193,7 +202,7 @@ class Draft:
         :param name: The player's discord name.
         :type name: str
         """
-        self.draft_players.append(Player(user_id=id, name=name))
+        self.draft_players.append(Player(user_id=id, user_name=name))
 
     def add_drafted_artists(self, artist_name):
         self.drafted_artists.add(artist_name)
@@ -208,8 +217,9 @@ class Draft:
         self.current_listeners = listeners
 
     def update_weekly_listeners(self, weekly_listener_data):
-        artistIndex = {name: i for i,
-                       name in enumerate(self.get_all_artists())}
+        self.set_current_listeners(weekly_listener_data)
+        artist_index = {name: i for i,
+                        name in enumerate(self.get_all_artists())}
 
         for player in self.get_all_players():
             weekly_total = 0
@@ -217,7 +227,7 @@ class Draft:
             for artist in player.artists:
                 player.ensure_artist(artist)
 
-                idx = artistIndex.get(artist, None)
+                idx = artist_index.get(artist, None)
                 listeners = weekly_listener_data[idx] if idx is not None else 0
 
                 # log weekly listeners
@@ -247,7 +257,45 @@ class Draft:
                 yearly_total = sum(listeners)
                 player.artist_info[artist]["yearly_total"] = yearly_total
 
-    def score_all_players(self):
+    def score_billboard(self):
+        self.billboard_current_songs = get_billboard_100(self)
+
+        artist_to_players = {}
+
+        for player in self.get_all_players():
+            for artist in player.get_all_artists():
+                artist_to_players.setdefault(artist, []).append(player)
+
+        for rank, artists in enumerate(self.billboard_current_songs[1]):
+
+            score = self.billboard_scoring[min(
+                rank, len(self.billboard_scoring) - 1)]
+
+            for artist in artists:
+                if artist in artist_to_players:
+                    for player in artist_to_players[artist]:
+
+                        info = player.get_artists_information().get(artist)
+                        if info is None:
+                            continue
+
+                        info["week_billboard_score"] += score
+                        info["total_billboard_score"] += score
+
+                        print(
+                            f"Updated Billboard User: {player} for Artist {info}")
+
+    def score_aoty(self):
+        for player in self.get_all_players():
+            return
+        return
+
+    def score_change(self):
+        for player in self.get_all_players():
+            return
+        return
+
+    def score_listeners(self):
         for player in self.get_all_players():
             return
         return

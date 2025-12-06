@@ -7,8 +7,45 @@ import time
 import os
 import glob
 import pickle
+import billboard
 
 respect_clock = 1  # seconds between requests
+
+
+def get_billboard_100(draft):
+    """Returns [song titles, [artists]]"""
+    chart = billboard.ChartData('hot-100')
+
+    billboard_artists = []
+    billboard_songs = []
+    special_artists = []
+
+    # remove comma names
+    for creator in draft.get_all_artists():
+        if creator.rfind(",") is not -1:
+            special_artists.append(creator.split(",")[0])
+
+    for entry in chart[0:]:
+        title = entry.title
+        artist: str = entry.artist
+
+        if artist.split(", ") in special_artists:
+            artist.remove(",")
+
+        artist_replace: str = artist.replace(
+            " & ", ", ").replace(" And ", ", ")
+
+        artist_split_1: str = artist_replace.split(":")[0]
+        artist_split_2: str = artist_split_1.split(" Featuring ")[0]
+        artist_split_3: str = artist_split_2.split(" With ")[0]
+        artist_split_4: str = artist_split_3.split(" Feat. ")[0]
+        artist_split_5: str = artist_split_4.split(" Feat ")[0]
+
+        artists: list = artist_split_5.split(", ")
+        billboard_artists.append(artists)
+        billboard_songs.append(title)
+
+    return billboard_songs, billboard_artists
 
 
 def get_artist_id(artist_name):
@@ -17,6 +54,7 @@ def get_artist_id(artist_name):
     # Replace spaces with "+" for URL
     query = urllib.parse.quote_plus(artist_name)
     search_url = f"https://www.albumoftheyear.org/search/?q={query}"
+    print(f"Looking up : {search_url}")
 
     # Set a browser-like user-agent
     try:
@@ -45,9 +83,8 @@ def get_artist_id(artist_name):
 
 def get_all_artist_albums(artist_id):
     time.sleep(respect_clock)
-    """Returns a list of all albums for a given artist ID from AlbumOfTheYear.org.
-    """
     artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
+    print(f"Looking up : {artist_url}")
 
     try:
         req = Request(artist_url, headers={"User-Agent": "Mozilla/6.0"})
@@ -59,31 +96,26 @@ def get_all_artist_albums(artist_id):
     soup = BeautifulSoup(page, "html.parser")
 
     categorized_albums = {}
-    headers = soup.find_all(["h2", "div"])
     current_category = None
 
-    for header in headers:
-        if header.name == "h2":
-            # New category found, update current_category
-            current_category = header.get_text(strip=True)
-            # Initialize list for this category
-            categorized_albums[current_category] = []
-        elif header.name == "div" and current_category == "Similar Artists":
-            # Similar Artists is structured differently
-            album_title_div = header.find("div", class_="name")
-            if album_title_div:
-                album_name = album_title_div.get_text().encode(
-                    "ascii", "ignore").decode().strip()
-                categorized_albums[current_category].append(album_name)
-        elif header.name == "div" and current_category:
-            # For each category, loop through all divs to find the album title
-            album_title_div = header.find("div", class_="albumTitle")
-            if album_title_div:
-                album_name = album_title_div.get_text().encode(
-                    "ascii", "ignore").decode().strip()
-                categorized_albums[current_category].append(album_name)
+    # This is safer because album blocks are structured consistently
+    album_blocks = soup.find_all("div", class_="albumBlock")
 
-    return categorized_albums['Albums']
+    albums = []
+    for block in album_blocks:
+        title_div = block.find("div", class_="albumTitle")
+        if not title_div:
+            continue
+
+        # KEEP UNICODE
+        album_name = title_div.get_text(strip=True)
+
+        # Skip blank names (shouldn't happen anymore)
+        if album_name:
+            albums.append(album_name)
+
+    print("Albums:", albums)
+    return albums
 
 
 def get_most_recent_album_user_score(artist_id):
@@ -95,6 +127,7 @@ def get_most_recent_album_user_score(artist_id):
     get_most_recent_album_user_score("500-clipse") -> "7.2"
     """
     artist_url = f"https://www.albumoftheyear.org/artist/{artist_id}/"
+    print(f"Looking up : {artist_url}")
 
     # Make the request with a browser User-Agent
     try:
@@ -109,8 +142,6 @@ def get_most_recent_album_user_score(artist_id):
     # Albums are usually listed in a div with class "albumTitle" inside a container
     album_blocks = soup.find_all("div", class_="albumBlock")
 
-    print(album_blocks)
-
     if not album_blocks:
         return None  # No albums found
 
@@ -121,8 +152,12 @@ def get_most_recent_album_user_score(artist_id):
     user_score_div = most_recent_album.find_all("div", class_="rating")
 
     if user_score_div:
-        score = user_score_div[1].get_text(strip=True)
-        return score
+        try:
+            score = user_score_div[1].get_text(strip=True)
+            return score
+        except IndexError:
+            score = user_score_div[0].get_text(strip=True)
+            return score
     else:
         return None  # No user score found
 
@@ -152,6 +187,7 @@ def download_pages():
         time.sleep(respect_clock)
         try:
             page_url = f"{url}{page}.html" if page > 1 else f"{url}.html"
+            print(f"Looking up : {page_url}")
             r = requests.get(page_url)
             r.raise_for_status()
         except requests.exceptions.RequestException:

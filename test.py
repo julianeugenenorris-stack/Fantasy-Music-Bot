@@ -1,18 +1,28 @@
-from datetime import datetime, timedelta
-import asyncio
+import billboard
 
-from cogs.draft import Draft
-from cogs.scraper import *
+chart = billboard.ChartData('hot-100')
 
+billboard_artists = []
+billboard_songs = []
+special_artists = ["the Creator"]
+for entry in chart[0:]:
+    title = entry.title
+    artist: str = entry.artist
 
-async def restart_end_of_season_timer(draft: Draft):
-    return
+    if artist.split(", ") in special_artists:
+        artist.remove(",")
 
+    artist_replace: str = artist.replace(" & ", ", ").replace(" And ", ", ")
 
-def start_end_of_season_timer():
-    current_datetime = datetime.now()
+    artist_split_1: str = artist_replace.split(":")[0]
+    artist_split_2: str = artist_split_1.split(" Featuring ")[0]
+    artist_split_3: str = artist_split_2.split(" With ")[0]
+    artist_split_4: str = artist_split_3.split(" Feat. ")[0]
+    artist_split_5: str = artist_split_4.split(" Feat ")[0]
 
-    one_year_later_approx = current_datetime + timedelta(days=364)
+    artists: list = artist_split_5.split(", ")
+    billboard_artists.append(artists)
+    billboard_songs.append(title)
 
-
-start_end_of_season_timer()
+for count, title in enumerate(billboard_songs):
+    print(f"Title: {title}, Artists: {billboard_artists[count]}")
