@@ -330,7 +330,7 @@ async def show_team(interaction: discord.Interaction):
 
 
 @show_team.error
-async def mycommand_error(ctx, error):
+async def show_teamte(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -339,31 +339,22 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="billboard", description="Show a players team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_artist(interaction: discord.Interaction, show: bool | None = True):
+async def show_billboard(interaction: discord.Interaction, show: bool | None = True):
     global draft
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft use.")
         return
 
-    await interaction.response.defer(thinking=True)
+    await interaction.response.defer()
+
     embeds = billboard_template(draft)
+    view = BillboardView(embeds)
 
-    if embeds is None:
-        await interaction.followup.send("No information available.")
-        return
-
-    if not isinstance(embeds, list):
-        embeds = [embeds]
-
-    if show is False:
-        await interaction.followup.send(embeds=embeds, ephemeral=True)
-        return
-
-    await interaction.followup.send(embeds=embeds)
+    await interaction.followup.send(embed=embeds[0], view=view)
 
 
 @draft_artist.error
-async def mycommand_error(ctx, error):
+async def show_billboard(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -609,5 +600,14 @@ async def draftArtist(interaction: discord.Interaction):
 @client.tree.command(name="stage", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draft_artist(interaction: discord.Interaction):
     await interaction.response.send_message(f"Draft is at stage {draft.get_stage()}.", delete_after=10, ephemeral=True)
+
+
+@client.tree.command(name="printplayerinfo", description="Draft artists to fantasy team.", guild=GUILD_ID)
+async def draftArtist(interaction: discord.Interaction):
+    player_info = None
+    for player in draft.get_all_players():
+        player_info = player.get_artists_information()
+    await interaction.response.send_message(f"{str(player_info)}")
+
 
 client.run(DISCORD_TOKEN)

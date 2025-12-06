@@ -44,6 +44,8 @@ class Player:
         self.billboard_score = 0
         self.change_score = 0
 
+        self.record = [0, 0]  # [win, loss]
+
     def get_artists_information(self):
         return self.artist_info
 
@@ -80,6 +82,9 @@ class Player:
             "starting_listeners": None,
             "total_score_change": 0
         }
+
+    def set_billboard_score(self, score: int):
+        self.billboard_score = score
 
     def set_artist(self, name: str, location: int):
         if len(self.artists) >= location:

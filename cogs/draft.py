@@ -265,6 +265,9 @@ class Draft:
         for player in self.get_all_players():
             for artist in player.get_all_artists():
                 artist_to_players.setdefault(artist, []).append(player)
+                info = player.get_artists_information().get(artist)
+                info["week_billboard_score"] = 0
+                info["songs_on_billboard"].clear()
 
         for rank, artists in enumerate(self.billboard_current_songs[1]):
 
@@ -281,6 +284,8 @@ class Draft:
 
                         info["week_billboard_score"] += score
                         info["total_billboard_score"] += score
+                        info["songs_on_billboard"].append(
+                            self.billboard_current_songs[0][rank])
 
                         print(
                             f"Updated Billboard User: {player} for Artist {info}")

@@ -13,7 +13,7 @@ respect_clock = 1  # seconds between requests
 
 
 def get_billboard_100(draft):
-    """Returns [song titles, [artists]]"""
+    """Returns [song titles, [artists]"""
     chart = billboard.ChartData('hot-100')
 
     billboard_artists = []

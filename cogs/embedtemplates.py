@@ -1,9 +1,37 @@
+from discord.ui import View, Button
 import discord
 from cogs.player import Player
 from cogs.draft import Draft
 from cogs.scraper import *
+from discord.ui import View, Button
 
 WEEK_MONTH_CONVER = 4.34524
+
+
+class BillboardView(View):
+    def __init__(self, embeds):
+        super().__init__(timeout=120)  # 2 minutes, adjust if needed
+        self.embeds = embeds
+        self.index = 0
+
+        # Disable previous at start
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.children[0].disabled = (self.index == 0)
+        self.children[1].disabled = (self.index == len(self.embeds) - 1)
+
+    @discord.ui.button(label="◀️ Previous", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: Button):
+        self.index -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
+
+    @discord.ui.button(label="Next ▶️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: Button):
+        self.index += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
 
 
 def team_template(user, player: Player, draft: Draft):
@@ -31,7 +59,7 @@ def artists_info_template(artist_name: str, draft: Draft):
     try:
         artist_id = get_artist_id(artist_name)
         albums_raw = get_all_artist_albums(artist_id)
-        albums_formatted = ", ".join(albums_raw)
+        albums_formatted = ", ".join(albums_raw[0:15])
         most_recent_oaty = get_most_recent_album_user_score(artist_id)
         split_name = artist_name.replace(" ", "-")
         artist_url = split_name.lower()
@@ -53,13 +81,14 @@ def artists_info_template(artist_name: str, draft: Draft):
 
     embed.add_field(
         name=f"Most recent album for {artist_name}",
-        value=f"User Score for {recent_album_name}: {most_recent_oaty}",
+        value=f"User Score for *{recent_album_name}* - {most_recent_oaty}",
         inline=False
     )
 
     embed.add_field(
         name=f"Current albums on aoty",
-        value=f"{albums_formatted}",
+        value=f"{albums_formatted}" if len(
+            albums_raw) < 15 else f"{albums_formatted}...",
         inline=False
     )
 
@@ -76,7 +105,7 @@ def artists_info_template(artist_name: str, draft: Draft):
     )
 
     embed.set_footer(
-        text=f"These are albums counted in last update, all new albums will be scored in the next update."
+        text=f"These are albums counted in last update, all new albums will be scored in the next update. Only 15 most recent albums displayed."
     )
 
     return embed
@@ -100,7 +129,7 @@ def billboard_template(draft: Draft):
 def build_billboard_embed(start, end, titles, artists):
     embed = discord.Embed(
         title=f"Billboard Hot 100: #{start+1}–{end}",
-        color=discord.Color.dark_gold(),
+        color=discord.Color.yellow(),
     )
 
     embed.set_thumbnail(
@@ -125,7 +154,7 @@ def build_billboard_embed(start, end, titles, artists):
 
         embed.add_field(
             name=f"#{index+1}: \"{title}\"",
-            value=f"By: {artists_tag}",
+            value=f"by: {artists_tag}",
             inline=False,
         )
 
@@ -135,16 +164,17 @@ def build_billboard_embed(start, end, titles, artists):
 def artists_albums_template(user, player: Player, draft: Draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team Artsits Albums",
-        color=discord.Color.blue(),
+        color=discord.Color.green(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
+    embed.set_footer(text="Only 5 most recent albums displayed.")
 
     artist_info = player.get_artists_information()
 
     for count, (name, data) in enumerate(artist_info.items(), start=1):
 
-        albums = ", ".join(data.get("albums_on_record", []))
+        albums = ", ".join(data.get("albums_on_record", [])[0:5])
 
         embed.add_field(
             name=f"{count}: {name}",
@@ -190,7 +220,7 @@ def weekly_listeners_template(user, player: Player, draft: Draft):
 def monthly_listeners_template(user, player: Player, draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team Last Month",
-        color=discord.Color.gold(),
+        color=discord.Color.blue(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -223,7 +253,7 @@ def monthly_listeners_template(user, player: Player, draft):
 def total_listeners_template(user, player: Player, draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team Total Listeners",
-        color=discord.Color.purple(),
+        color=discord.Color.blue(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -254,7 +284,7 @@ def total_listeners_template(user, player: Player, draft):
 def weekly_scores_template(user, player: Player, draft: Draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team Last Week",
-        color=discord.Color.blue(),
+        color=discord.Color.green(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -273,11 +303,11 @@ def weekly_scores_template(user, player: Player, draft: Draft):
     for count, (artist_name, data) in enumerate(artist_scores.items(), start=1):
 
         # safely get weekly score
-        weekly = data.get("weekly", 0)
+        weekly = data.get("weekly", [])
 
         embed.add_field(
             name=f"{count}: {artist_name}",
-            value=f"{weekly:,}",
+            value=f"{weekly[len(weekly)-1]:,}",
             inline=False
         )
 
@@ -286,31 +316,33 @@ def weekly_scores_template(user, player: Player, draft: Draft):
 
 def monthly_scores_template(user, player, draft):
     embed = discord.Embed(
-        title=f"{user.name}'s Team Last Month",
-        color=discord.Color.gold(),
+        title=f"{user.name}'s Team Last Week",
+        color=discord.Color.green(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
     embed.set_footer(text="# is listeners per month.")
 
-    monthly_scores = player.getMonthlyArtistScores()
-    count = 1
+    artist_scores = player.get_artists_information()  # dict: {artist: {}}
 
-    for artist_name in enumerate(player.get_all_artists()):
-        # Get score from dict safely
-        listeners = monthly_scores.get(artist_name)
+    if not artist_scores:
+        embed.add_field(
+            name="No Scores Found",
+            value="This player has no artist data yet.",
+            inline=False
+        )
+        return embed
 
-        if listeners is None:
-            if artist_name in draft.get_all_artists():
-                return "Need more information to perform this command."
-            listeners = 0
+    for count, (artist_name, data) in enumerate(artist_scores.items(), start=1):
+
+        # safely get weekly score
+        monthly = data.get("monthly", [])
 
         embed.add_field(
             name=f"{count}: {artist_name}",
-            value=f"{listeners:,}",
-            inline=False,
+            value=f"{monthly[len(monthly)-1]:,}",
+            inline=False
         )
-        count += 1
 
     return embed
 
@@ -318,7 +350,7 @@ def monthly_scores_template(user, player, draft):
 def total_scores_template(user, player, draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team Total Listeners",
-        color=discord.Color.purple(),
+        color=discord.Color.green(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)

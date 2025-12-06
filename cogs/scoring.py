@@ -5,6 +5,7 @@ from cogs.draft import Draft
 from cogs.scraper import *
 
 season_week_length: int = 52
+season_month_length: int = 4
 
 
 async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=None):
@@ -79,8 +80,6 @@ async def update_draft(draft: Draft, interaction):
             return
 
         # Update league (draft) info
-
-        await interaction.followup.send("Downloading latest artists and listeners...")
 
         await interaction.followup.send("Downloading artists and listeners...")
         website_arrays = get_full_artists_data()
