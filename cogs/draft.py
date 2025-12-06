@@ -168,14 +168,15 @@ class Draft:
                 return
             self.turn += self.direction
 
-    def add_new_player(self, id: str, name: str):
+    def add_new_player(self, id: str, name: str, team):
         """Adds new player to the draft.
         :param user_id: The player's discord id.
         :type user_id: int
         :param name: The player's discord name.
         :type name: str
         """
-        self.draft_players.append(Player(user_id=id, user_name=name))
+        self.draft_players.append(
+            Player(user_id=id, user_name=name, team_name=team))
 
     def update_starting_player_listeners(self):
         """Only used at start of season"""
@@ -252,17 +253,19 @@ class Draft:
                         if info is None:
                             continue
 
-                        info["week_billboard_score"] += score
+                        info["week_billboard_score"] = score
                         info["total_billboard_score"] += score
                         info["songs_on_billboard"].append(
                             self.billboard_current_songs[0][rank])
 
         for player in self.get_all_players():
-            temp_billboard_score = 0
+            weekly_billboard_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
                 temp_billboard_score += info["total_billboard_score"]
-            player.total_billboard_score = temp_billboard_score
+            player.total_billboard_score += weekly_billboard_score
+            player.matchup_billboard_score += weekly_billboard_score
+            player.weeks_billboard_score = weekly_billboard_score
 
     def score_change(self):  # total_score_change
         for player in self.get_all_players():
@@ -284,6 +287,7 @@ class Draft:
 
     def score_aoty(self):
         for player in self.get_all_players():
+            weekly_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
                 info["new_album_score"] = 0
@@ -303,7 +307,7 @@ class Draft:
                             min_val = int(score_range[:-1])
                             if album_score >= min_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.total_aoty_score += self.aoty_scoring[index]
+                                weekly_score += self.aoty_scoring[index]
                                 break
 
                         # Case 2: "64-"
@@ -311,7 +315,7 @@ class Draft:
                             max_val = int(score_range[:-1])
                             if album_score <= max_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.total_aoty_score += self.aoty_scoring[index]
+                                weekly_score += self.aoty_scoring[index]
                                 break
 
                         # Case 3: mid-range "89-85"
@@ -319,8 +323,11 @@ class Draft:
                             start, end = map(int, score_range.split("-"))
                             if start >= album_score >= end:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.total_aoty_score += self.aoty_scoring[index]
+                                weekly_score += self.aoty_scoring[index]
                                 break
+            player.weeks_aoty_score = weekly_score
+            player.matchup_aoty_score += weekly_score
+            player.total_aoty_score += weekly_score
 
     def score_listeners(self):
         for player in self.get_all_players():
@@ -335,13 +342,20 @@ class Draft:
                 info["monthly_score"] = monthly_listeners * self.listener_mult
                 monthly_total += monthly_listeners * self.listener_mult
                 info["yearly_total"] += weekly_listeners * self.listener_mult
-            player.weekly_listeners_score = weekly_total
+            player.weeks_listener_score = weekly_total
             player.monthly_listeners_score = monthly_total
             player.total_listeners_score += weekly_total
             player.matchup_listeners_score += weekly_total
 
-    def score_week_total(self):
+    def score_total(self):
         for player in self.get_all_players():
+            player.total_score = player.total_listeners_score + \
+                player.total_aoty_score + player.total_billboard_score + player.total_change_score
+            player.weeks_score = player.weeks_listener_score + \
+                player.weeks_aoty_score + player.weeks_billboard_score + player.weeks_change_score
+            player.matchup_score = player.matchup_listeners_score + \
+                player.matchup_aoty_score + player.matchup_billboard_score + \
+                player.matchup_change_score
             for artist in player.artists:
                 info = player.artist_info.get(artist)
                 week_listeners_score = info["weekly_score"]

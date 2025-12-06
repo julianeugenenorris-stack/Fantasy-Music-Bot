@@ -230,7 +230,6 @@ def monthly_listeners_template(user, player: Player, draft):
 
     for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
 
-        # safely get weemonthlykly score
         monthly = data.get("monthly")
         monthly_listeners += monthly[len(monthly)-1]
         embed.add_field(
@@ -300,7 +299,7 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             )
             return embed
 
-        total_score = player.total_billboard_score
+        total_score = player.weeks_billboard_score
 
         embed.add_field(
             name=f"Total Weekly Billboard Score:",
@@ -308,7 +307,7 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             inline=False
         )
 
-        total_score = player.total_aoty_score
+        total_score = player.weeks_aoty_score
 
         embed.add_field(
             name=f"Total Week's Album Score:",
@@ -316,7 +315,7 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             inline=False
         )
 
-        total_score = player.weekly_listeners_score
+        total_score = player.weeks_listener_score
 
         embed.add_field(
             name=f"Total Weekly Listeners Score:",
@@ -444,7 +443,7 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
                 inline=False
             )
 
-        total_score = player.weekly_listeners_score
+        total_score = player.weeks_listener_score
 
         embed.add_field(
             name=f"Total Weekly Listeners Score:",
@@ -532,7 +531,7 @@ def total_scores_template(user, player: Player, draft: Draft, type: str):
             inline=False
         )
 
-        total_score = player.weekly_listeners_score
+        total_score = player.weeks_listener_score
 
         embed.add_field(
             name=f"Total Weekly Listeners Score:",
@@ -658,7 +657,7 @@ def total_scores_template(user, player: Player, draft: Draft, type: str):
                 inline=False
             )
 
-        total_score = player.weekly_listeners_score
+        total_score = player.weeks_listener_score
 
         embed.add_field(
             name=f"Total Weekly Listeners Score:",

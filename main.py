@@ -142,7 +142,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="join", description="Join fantasy draft as a player.", guild=GUILD_ID)
 @commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
-async def join(interaction: discord.Interaction):
+async def join(interaction: discord.Interaction, team_name: str):
     global draft
 
     if draft is None:
@@ -160,7 +160,7 @@ async def join(interaction: discord.Interaction):
                 await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
                 return
 
-    draft.add_new_player(user.id, user.name)
+    draft.add_new_player(user.id, user.name, team_name)
 
     draft_name = f"draft{draft.draft_name}"
     save_object(draft, draft_name)
