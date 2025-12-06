@@ -488,7 +488,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="scores", description="Show a teams scores for a certain time or time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_scores(interaction: discord.Interaction, time: Literal["week", "month", "total"], week: int | None, show: bool | None):
+async def show_scores(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], type: Literal["billboard", "change", "aoty", "listeners", "all"], week: int | None, show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -514,11 +514,11 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
     else:
         if time == "week":
-            embed = weekly_scores_template(user, player, draft)
-        if time == "month":
-            embed = monthly_scores_template(user, player, draft)
+            embed = weekly_scores_template(user, player, draft, type)
+        if time == "matchup":
+            embed = matchup_scores_template(user, player, draft, type)
         if time == "total":
-            embed = total_scores_template(user, player, draft)
+            embed = total_scores_template(user, player, draft, type)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -607,7 +607,18 @@ async def draftArtist(interaction: discord.Interaction):
     player_info = None
     for player in draft.get_all_players():
         player_info = player.get_artists_information()
-    await interaction.response.send_message(f"{str(player_info)}")
+    print(str(player_info))
+    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
+
+
+@client.tree.command(name="removelastalbum", description="Draft artists to fantasy team.", guild=GUILD_ID)
+async def draftArtist(interaction: discord.Interaction, artist: str):
+    player_info = None
+    for player in draft.get_all_players():
+        player_info: list = player.get_artists_information()[
+            artist]["albums_on_record"]
+        player_info.remove(player_info[0])
+    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
 
 
 client.run(DISCORD_TOKEN)

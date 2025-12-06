@@ -64,18 +64,24 @@ class Player:
     def get_id(self):
         return self.user_id
 
+    def add_aoty_score(self, score: int):
+        self.aoty_score += score
+
     def draft_artist(self, name: str):
         self.artists.append(name)
         id = get_artist_id(name.lower())
         self.artist_info[name] = {
             "weekly": [],
+            "weekly_score": 0,
             "monthly": [],
+            "monthly_score": 0,
             "yearly_total": 0,
             "id_aoty": id,
             "albums_on_record": get_all_artist_albums(id),
             "picked": True,
             "new_album_aoty_score": 0,
             "new_album_score": 0,
+            "new_album_name": "",
             "total_billboard_score": 0,
             "week_billboard_score": 0,
             "songs_on_billboard": [],

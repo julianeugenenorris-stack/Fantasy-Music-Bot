@@ -84,7 +84,6 @@ async def update_draft(draft: Draft, interaction):
         await interaction.followup.send("Downloading artists and listeners...")
         website_arrays = get_full_artists_data()
 
-        draft.next_stage()
         draft.set_all_artists(website_arrays[0])
 
         draft.week_in_season += 1

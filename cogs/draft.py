@@ -290,15 +290,51 @@ class Draft:
                         print(
                             f"Updated Billboard User: {player} for Artist {info}")
 
-    def score_aoty(self):
         for player in self.get_all_players():
-            return
-        return
+            temp_billboard_score = 0
+            for artist in player.get_all_artists():
+                info = player.get_artists_information().get(artist)
+                temp_billboard_score += info["total_billboard_score"]
+            player.set_billboard_score(temp_billboard_score)
 
     def score_change(self):
         for player in self.get_all_players():
             return
         return
+
+    def score_aoty(self):
+        for player in self.get_all_players():
+            for artist in player.get_all_artists():
+                info = player.get_artists_information().get(artist)
+                current_albums = get_all_artist_albums(
+                    artist_id=info["id_aoty"])
+                if current_albums != info["albums_on_record"]:
+                    info["albums_on_record"] = current_albums
+                    info["new_album_name"] = current_albums[0]
+                    album_score = get_most_recent_album_user_score(
+                        info["id_aoty"])
+                    info["new_album_aoty_score"] = album_score
+
+                    for index, score_range in enumerate(self.aoty_scoring_guide):
+                        if index == 0:
+                            info["new_album_score"] = int(
+                                self.aoty_scoring[index])
+                            player.add_aoty_score(
+                                int(self.aoty_scoring[index]))
+                            break
+                        if index == len(self.aoty_scoring_guide) - 1:
+                            info["new_album_score"] = int(
+                                self.aoty_scoring[index])
+                            print(f"new score: {info["new_album_score"]}")
+                            player.add_aoty_score(
+                                int(self.aoty_scoring[index]))
+                            break
+                        else:
+                            start, end = score_range.split("-")
+                            if int(start) >= album_score >= int(end):
+                                info["new_album_score"] = self.aoty_scoring[index]
+                                player.add_aoty_score(self.aoty_scoring[index])
+                                break
 
     def score_listeners(self):
         for player in self.get_all_players():
