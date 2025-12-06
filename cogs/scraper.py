@@ -22,7 +22,7 @@ def get_billboard_100(draft):
 
     # remove comma names
     for creator in draft.get_all_artists():
-        if creator.rfind(",") is not -1:
+        if creator.rfind(",") != -1:
             special_artists.append(creator.split(",")[0])
 
     for entry in chart[0:]:
@@ -114,7 +114,6 @@ def get_all_artist_albums(artist_id):
         if album_name:
             albums.append(album_name)
 
-    print("Albums:", albums)
     return albums
 
 

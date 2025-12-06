@@ -7,9 +7,9 @@ class Draft:
             self,
             name: str,
             rounds: int,
-            monthly: float = 0.00000003333,
-            change: float | None = None,
-            aoty: list | None = [50, 25, 15, 10, 5, -5, -25],
+            listener_mult: float = 0.00000003333,
+            change_mult: float | None = 0.000003333,
+            aoty: list | None = [50, 25, 15, 10, 5, 1, -5, -25],
             billboard_scoring: list | None = [
                 10, 5, 5, 5, 5, 3, 3, 3, 3, 3, 1.5],
     ) -> None:
@@ -18,10 +18,10 @@ class Draft:
         :type name: str
         :param rounds: Number of rounds in the draft.
         :type rounds: int
-        :param monthly: How many points monthly listeners will count for per week.
-        :type monthly: float
-        :param change: How many points will be added as an artists monthly listeners goes up and down.
-        :type change: float | None
+        :param listener_mult: How many points listener_mult listeners will count for per week.
+        :type listener_mult: float
+        :param change_mult: How many points will be added as an artists listener_mult listeners goes up and down.
+        :type change_mult: float | None
         :param aoty: How many points will be added for album of the year user scores.
         :type aoty: list | None
         :param billboard_scoring: How many points will be scored for the billboard_scoring rankings.
@@ -42,11 +42,11 @@ class Draft:
         self.starting_listeners: list = None
         self.current_listeners: list = None
 
-        self.monthly: float = monthly
-        self.change: float | None = change
+        self.listener_mult: float = listener_mult
+        self.change_mult: float | None = change_mult
 
         self.aoty_scoring_guide = ["90+", "89-85",
-                                   "84-82", "81-79", "78-75", "74-65", "64-"]
+                                   "84-82", "81-79", "78-75", "74-70", "69-65", "64-"]
         self.aoty_scoring: list[float] = aoty
         """Shows how much an album scores if it is in the a range of aoty user scores. 7 spots in list. 
         [if an album gets a 90+ it will be a this, 89 - 85, 84 - 82, 81 - 79, 78 - 75, 74 - 65, and 64 to the min score]"""
@@ -65,8 +65,8 @@ class Draft:
 
     def new_settings(self,
                      rounds: int | None = None,
-                     monthly: float | None = None,
-                     change: float | None = None,
+                     listener_mult: float | None = None,
+                     change_mult: float | None = None,
                      aoty_range: str | None = None,
                      aoty_score: float | None = None,
                      billboard_score: float | None = None,
@@ -74,10 +74,10 @@ class Draft:
         """
         :param rounds: Number of rounds in the draft.
         :type rounds: int
-        :param monthly: How many points monthly listeners will count for per week.
-        :type monthly: float
-        :param change: How many points will be added as an artists monthly listeners goes up and down.
-        :type change: float | None
+        :param listener_mult: How many points listener_mult listeners will count for per week.
+        :type listener_mult: float
+        :param change_mult: How many points will be added as an artists listener_mult listeners goes up and down.
+        :type change_mult: float | None
         :param aoty_range: The range the user is changing.
         :type aoty_range: str | None
         :param aoty_score: What the new score will be in the range.
@@ -89,10 +89,10 @@ class Draft:
         """
         if rounds is not None:
             self.rounds = rounds
-        if monthly is not None:
-            self.monthly = monthly
-        if change is not None:
-            self.change = change
+        if listener_mult is not None:
+            self.listener_mult = listener_mult
+        if change_mult is not None:
+            self.change = change_mult
         if aoty_range is not None:
             if aoty_score is not None:
                 index = self.aoty_scoring_guide.index(aoty_range)
@@ -104,8 +104,8 @@ class Draft:
     def get_settings(self) -> list:
         return {
             "rounds": self.rounds,
-            "change": self.change,
-            "monthly": self.monthly,
+            "change_mult": self.change_mult,
+            "listener_mult": self.listener_mult,
             "aoty": self.aoty_scoring,
             "aoty_scoring_guide": self.aoty_scoring_guide,
             "billboard_scoring": self.billboard_scoring
@@ -131,7 +131,7 @@ class Draft:
 
     def next_stage(self) -> None:
         """Goes to next stage of draft. 0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is overd"""
-        if self.stage is 3:
+        if self.stage == 3:
             print("Warning: Season is over.")
 
         if self.stage > 3:
@@ -219,6 +219,15 @@ class Draft:
     def set_current_listeners(self, listeners: list):
         self.current_listeners = listeners
 
+    def update_starting_player_listeners(self):
+        """Only used at start of season"""
+        self.set_starting_listeners(self.current_listeners)
+        for player in self.get_all_players():
+            for artist in player.artists:
+                info = player.get_artists_information().get(artist)
+                index = self.all_artists.index(artist)
+                info["starting_listeners"] = self.starting_listeners[index]
+
     def update_weekly_listeners(self, weekly_listener_data):
         self.set_current_listeners(weekly_listener_data)
         artist_index = {name: i for i,
@@ -290,9 +299,6 @@ class Draft:
                         info["songs_on_billboard"].append(
                             self.billboard_current_songs[0][rank])
 
-                        print(
-                            f"Updated Billboard User: {player} for Artist {info}")
-
         for player in self.get_all_players():
             temp_billboard_score = 0
             for artist in player.get_all_artists():
@@ -302,13 +308,26 @@ class Draft:
 
     def score_change(self):
         for player in self.get_all_players():
-            return
-        return
+            player.set_total_change_listeners(0)
+            change_total_listeners = 0
+            change_total_score = 0
+            for artist in player.get_all_artists():
+                info = player.get_artists_information().get(artist)
+                weekly_listeners = info["weekly"][-1]
+                start_listeners = info["starting_listeners"]
+                change_listeners = weekly_listeners - start_listeners
+                change_total_listeners += change_listeners
+                info["listeners_change"] = change_listeners * self.change_mult
+                change_total_score += change_listeners * self.change_mult
+                info["score_change"] = change_listeners * self.change_mult
+            player.add_change_score(change_total_score)
+            player.set_total_change_listeners(change_total_listeners)
 
     def score_aoty(self):
         for player in self.get_all_players():
             for artist in player.get_all_artists():
                 info = player.get_artists_information().get(artist)
+                info["new_album_score"] = 0
                 current_albums = get_all_artist_albums(
                     artist_id=info["id_aoty"])
                 if current_albums != info["albums_on_record"]:
@@ -346,8 +365,31 @@ class Draft:
 
     def score_listeners(self):
         for player in self.get_all_players():
-            return
-        return
+            monthly_total = 0
+            weekly_total = 0
+            for artist in player.get_all_artists():
+                info = player.get_artists_information().get(artist)
+                monthly_listeners = info["monthly"][-1]
+                weekly_listeners = info["weekly"][-1]
+                info["weekly_score"] = weekly_listeners * self.listener_mult
+                weekly_total += weekly_listeners * self.listener_mult
+                info["monthly_score"] = monthly_listeners * self.listener_mult
+                monthly_total += monthly_listeners * self.listener_mult
+                info["yearly_total"] += weekly_listeners * self.listener_mult
+            player.set_weekly_listeners_score(weekly_total)
+            player.set_monthly_listeners_score(monthly_total)
+            player.add_total_listeners_score(weekly_total)
+
+    def score_week_total(self):
+        for player in self.get_all_players():
+            for artist in player.get_all_artists():
+                info = player.get_artists_information().get(artist)
+                week_listeners_score = info["weekly_score"]
+                billboard_score = info["week_billboard_score"]
+                album_score = info["new_album_score"]
+                change_score = info["score_change"]
+                info["week_total_score"] = week_listeners_score + \
+                    billboard_score + album_score + change_score
 
     def end_season():
         print("End season")

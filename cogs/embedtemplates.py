@@ -37,7 +37,7 @@ class BillboardView(View):
 def team_template(user, player: Player, draft: Draft):
     embed = discord.Embed(
         title=f"{user.name}'s Team",
-        color=discord.Color.blue(),
+        color=discord.Color.dark_magenta(),
     )
 
     embed.set_thumbnail(url=user.display_avatar.url)
@@ -63,8 +63,6 @@ def artists_info_template(artist_name: str, draft: Draft):
         most_recent_oaty = get_most_recent_album_user_score(artist_id)
         split_name = artist_name.replace(" ", "-")
         artist_url = split_name.lower()
-        print(
-            f"Length of artists: {len(draft.get_all_artists())}\nLength of Listeners: {len(draft.get_current_listeners())}")
         index_artist = draft.get_all_artists().index(artist_name)
         monthly_listeners = draft.get_current_listeners()[index_artist]
 
@@ -268,7 +266,7 @@ def total_listeners_template(user, player: Player, draft):
 
         embed.add_field(
             name=f"{count}: {artist_name}",
-            value=f"{yearly:,}",
+            value=f"{int(yearly):,}",
             inline=False
         )
 
@@ -290,7 +288,6 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
     )
     if type == "all":
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.set_footer(text="# is listeners per month.")
 
         # dict: {artist: {...}}
         artist_scores = player.get_artists_information()
@@ -303,30 +300,42 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             )
             return embed
 
-        for count, (artist_name, data) in enumerate(artist_scores.items(), start=1):
+        total_score = player.get_billboard_score()
 
-            weekly_score = data.get("week_billboard_score")
-            new_album_aoty_score = data.get("new_album_aoty_score")
-            weekly_listeners_score = data.get("weekly_score")
+        embed.add_field(
+            name=f"Total Weekly Billboard Score:",
+            value=f"{total_score}",
+            inline=False
+        )
 
-            if weekly_score != 0:
-                embed.add_field(
-                    name=f"{artist_name}:",
-                    value=f"Listeners Score: {weekly_listeners_score:,}\nWeekly Billboard Score: {weekly_score:,}\nWeekly Album Score: {new_album_aoty_score:,}",
-                    inline=False
-                )
-            else:
-                embed.add_field(
-                    name=f"{artist_name}:",
-                    value=f"Has no monthly listener score yet.",
-                    inline=False
-                )
+        total_score = player.get_aoty_score()
+
+        embed.add_field(
+            name=f"Total Week's Album Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
+        total_score = player.get_weekly_listeners_score()
+
+        embed.add_field(
+            name=f"Total Weekly Listeners Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
+        total_score = player.get_change_score()
+
+        embed.add_field(
+            name=f"Total Weekly Change Score:",
+            value=f"{total_score}",
+            inline=False
+        )
 
         return embed
 
     if type == "billboard":
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.set_footer(text="# is listeners per month.")
 
         # dict: {artist: {...}}
         artist_scores = player.get_artists_information()
@@ -358,11 +367,18 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
                     inline=False
                 )
 
+        total_score = player.get_billboard_score()
+
+        embed.add_field(
+            name=f"Total Weekly Billboard Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
         return embed
 
     if type == "aoty":
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.set_footer(text="# is listeners per month.")
 
         # dict: {artist: {...}}
         artist_scores = player.get_artists_information()
@@ -381,10 +397,10 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
             new_album_score = data.get("new_album_score")
             new_album_aoty_score = data.get("new_album_aoty_score")
 
-            if new_album_name is not "":
+            if new_album_name != "":
                 embed.add_field(
                     name=f"{artist_name}:",
-                    value=f"New Album: {new_album_name}\nAoty User Score: {new_album_aoty_score}\nWeekly Album Score: {new_album_score}",
+                    value=f"New Album: {new_album_name}\nAoty User Score: {new_album_aoty_score}\nAlbum Score Added: {new_album_score}",
                     inline=False
                 )
             else:
@@ -394,11 +410,97 @@ def weekly_scores_template(user, player: Player, draft: Draft, type: str):
                     inline=False
                 )
 
+        total_score = player.get_aoty_score()
+
+        embed.add_field(
+            name=f"Total Week's Album Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
         return embed
 
     if type == "listeners":
+        embed.set_thumbnail(url=user.display_avatar.url)
+
+        # dict: {artist: {...}}
+        artist_scores = player.get_artists_information()
+
+        if not artist_scores:
+            embed.add_field(
+                name="No Scores Found",
+                value="This player has no artist data yet.",
+                inline=False
+            )
+            return embed
+
+        for count, (artist_name, data) in enumerate(artist_scores.items(), start=1):
+
+            weekly_score = data.get("weekly_score")
+
+            if weekly_score == 0:
+                embed.add_field(
+                    name=f"#{count} {artist_name}:",
+                    value=f"{weekly_score}",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name=f"{artist_name}:",
+                    value=f"Has less than half a million monthly listeners.",
+                    inline=False
+                )
+
+        total_score = player.get_weekly_listeners_score()
+
+        embed.add_field(
+            name=f"Total Weekly Listeners Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
         return embed
+
     if type == "change":
+        embed.set_thumbnail(url=user.display_avatar.url)
+
+        # dict: {artist: {...}}
+        artist_scores = player.get_artists_information()
+
+        if not artist_scores:
+            embed.add_field(
+                name="No Scores Found",
+                value="This player has no artist data yet.",
+                inline=False
+            )
+            return embed
+
+        for count, (artist_name, data) in enumerate(artist_scores.items(), start=1):
+
+            listeners_change = data.get("listeners_change")
+            score_change = data.get("score_change")
+
+            if listeners_change == 0:
+                embed.add_field(
+                    name=f"{artist_name}:",
+                    value=f"Change In Listeners: {listeners_change}\nChange Score: {score_change}",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name=f"{artist_name}:",
+                    value=f"No change in listeners or less than half a million monthly listeners",
+                    inline=False
+                )
+
+        total_score = player.get_change_score()
+
+        embed.add_field(
+            name=f"Total Weekly Change Score:",
+            value=f"{total_score}",
+            inline=False
+        )
+
         return embed
 
 

@@ -119,6 +119,10 @@ async def update_score(draft: Draft, interaction):
         draft.score_listeners()
         await interaction.followup.send("Scoring Change In Listeners completed!")
 
+        await interaction.followup.send("Scoring Full Week...")
+        draft.score_week_total()
+        await interaction.followup.send("Scoring Full Week completed!")
+
         await interaction.followup.send("Weekly scores updated...")
     except Exception as e:
         await interaction.followup.send(f"Error during weekly score update: {e}")

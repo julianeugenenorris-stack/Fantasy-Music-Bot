@@ -192,6 +192,8 @@ async def start_season(interaction: discord.Interaction, day: int, hour: int, mi
 
     await interaction.response.send_message(f"Starting {draft.get_name()}'s fantasy season.")
 
+    draft.update_starting_player_listeners()
+
     # start season
     client.loop.create_task(weekly_update(
         draft, interaction, day=day, hour=hour, minute=minute))
@@ -420,7 +422,7 @@ async def show_album(interaction: discord.Interaction, show: bool | None):
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    embed = artists_albums_template(user, player)
+    embed = artists_albums_template(user, player, draft)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -619,15 +621,6 @@ async def draftArtist(interaction: discord.Interaction, artist: str):
         player_info: list = player.get_artists_information()[
             artist]["albums_on_record"]
         player_info.remove(player_info[0])
-    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="aotyscoring", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction, artist: str):
-    player_info = None
-    for player in draft.get_all_players():
-        player_info = player.get_aoty_score()
-    print(f"{str(draft.get_aoty_scoring())}: Total scoring: {player_info}")
     await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
 
 
