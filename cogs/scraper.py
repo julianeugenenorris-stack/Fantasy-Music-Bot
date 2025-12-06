@@ -21,7 +21,7 @@ def get_billboard_100(draft):
     special_artists = []
 
     # remove comma names
-    for creator in draft.get_all_artists():
+    for creator in draft.all_artists:
         if creator.rfind(",") != -1:
             special_artists.append(creator.split(",")[0])
 

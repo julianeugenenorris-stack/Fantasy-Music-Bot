@@ -126,9 +126,6 @@ class Draft:
         except TypeError:
             return False
 
-    def get_stage(self,) -> int:
-        return self.stage
-
     def next_stage(self) -> None:
         """Goes to next stage of draft. 0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is overd"""
         if self.stage == 3:
@@ -146,38 +143,11 @@ class Draft:
         """
         return len(self.draft_players)
 
-    def get_name(self):
-        return self.draft_name
-
-    def get_billboard_current_songs(self):
-        return self.billboard_current_songs
-
-    def get_current_listeners(self):
-        return self.current_listeners
-
-    def get_all_artists(self):
-        return self.all_artists
-
-    def get_turn(self):
-        return self.turn
-
-    def get_round(self):
-        return self.rounds
-
-    def get_aoty_scoring(self):
-        return self.aoty_scoring
-
     def get_all_players(self):
         return [p for p in self.draft_players if isinstance(p, Player)]
 
     def get_update_time(self):
         return self.draft_update_time
-
-    def get_week_in_season(self):
-        return self.week_in_season
-
-    def set_draft_update_time(self, update_list: list):
-        self.draft_update_time = update_list
 
     def next_turn(self) -> None:
         """Goes to the next player in the draft order"""
@@ -207,31 +177,19 @@ class Draft:
         """
         self.draft_players.append(Player(user_id=id, user_name=name))
 
-    def add_drafted_artists(self, artist_name):
-        self.drafted_artists.add(artist_name)
-
-    def set_all_artists(self, artists: list):
-        self.all_artists = artists
-
-    def set_starting_listeners(self, listeners: list):
-        self.starting_listeners = listeners
-
-    def set_current_listeners(self, listeners: list):
-        self.current_listeners = listeners
-
     def update_starting_player_listeners(self):
         """Only used at start of season"""
-        self.set_starting_listeners(self.current_listeners)
+        self.starting_listeners = self.current_listeners
         for player in self.get_all_players():
             for artist in player.artists:
-                info = player.get_artists_information().get(artist)
+                info = player.artist_info.get(artist)
                 index = self.all_artists.index(artist)
                 info["starting_listeners"] = self.starting_listeners[index]
 
     def update_weekly_listeners(self, weekly_listener_data):
-        self.set_current_listeners(weekly_listener_data)
+        self.current_listeners = weekly_listener_data
         artist_index = {name: i for i,
-                        name in enumerate(self.get_all_artists())}
+                        name in enumerate(self.all_artists)}
 
         for player in self.get_all_players():
             weekly_total = 0
@@ -275,9 +233,9 @@ class Draft:
         artist_to_players = {}
 
         for player in self.get_all_players():
-            for artist in player.get_all_artists():
+            for artist in player.artists:
                 artist_to_players.setdefault(artist, []).append(player)
-                info = player.get_artists_information().get(artist)
+                info = player.artist_info.get(artist)
                 info["week_billboard_score"] = 0
                 info["songs_on_billboard"].clear()
 
@@ -290,7 +248,7 @@ class Draft:
                 if artist in artist_to_players:
                     for player in artist_to_players[artist]:
 
-                        info = player.get_artists_information().get(artist)
+                        info = player.artist_info.get(artist)
                         if info is None:
                             continue
 
@@ -301,18 +259,18 @@ class Draft:
 
         for player in self.get_all_players():
             temp_billboard_score = 0
-            for artist in player.get_all_artists():
-                info = player.get_artists_information().get(artist)
+            for artist in player.artists:
+                info = player.artist_info.get(artist)
                 temp_billboard_score += info["total_billboard_score"]
-            player.set_billboard_score(temp_billboard_score)
+            player.total_billboard_score = temp_billboard_score
 
-    def score_change(self):
+    def score_change(self):  # total_score_change
         for player in self.get_all_players():
-            player.set_total_change_listeners(0)
+            player.total_change_listeners = 0
             change_total_listeners = 0
             change_total_score = 0
-            for artist in player.get_all_artists():
-                info = player.get_artists_information().get(artist)
+            for artist in player.artists:
+                info = player.artist_info.get(artist)
                 weekly_listeners = info["weekly"][-1]
                 start_listeners = info["starting_listeners"]
                 change_listeners = weekly_listeners - start_listeners
@@ -320,13 +278,14 @@ class Draft:
                 info["listeners_change"] = change_listeners * self.change_mult
                 change_total_score += change_listeners * self.change_mult
                 info["score_change"] = change_listeners * self.change_mult
-            player.add_change_score(change_total_score)
-            player.set_total_change_listeners(change_total_listeners)
+            player.total_change_score += change_total_score
+            player.matchup_change_score += change_total_score
+            player.weeks_change_score = change_total_score
 
     def score_aoty(self):
         for player in self.get_all_players():
-            for artist in player.get_all_artists():
-                info = player.get_artists_information().get(artist)
+            for artist in player.artists:
+                info = player.artist_info.get(artist)
                 info["new_album_score"] = 0
                 current_albums = get_all_artist_albums(
                     artist_id=info["id_aoty"])
@@ -344,7 +303,7 @@ class Draft:
                             min_val = int(score_range[:-1])
                             if album_score >= min_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.add_aoty_score(self.aoty_scoring[index])
+                                player.total_aoty_score += self.aoty_scoring[index]
                                 break
 
                         # Case 2: "64-"
@@ -352,7 +311,7 @@ class Draft:
                             max_val = int(score_range[:-1])
                             if album_score <= max_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.add_aoty_score(self.aoty_scoring[index])
+                                player.total_aoty_score += self.aoty_scoring[index]
                                 break
 
                         # Case 3: mid-range "89-85"
@@ -360,15 +319,15 @@ class Draft:
                             start, end = map(int, score_range.split("-"))
                             if start >= album_score >= end:
                                 info["new_album_score"] = self.aoty_scoring[index]
-                                player.add_aoty_score(self.aoty_scoring[index])
+                                player.total_aoty_score += self.aoty_scoring[index]
                                 break
 
     def score_listeners(self):
         for player in self.get_all_players():
             monthly_total = 0
             weekly_total = 0
-            for artist in player.get_all_artists():
-                info = player.get_artists_information().get(artist)
+            for artist in player.artists:
+                info = player.artist_info.get(artist)
                 monthly_listeners = info["monthly"][-1]
                 weekly_listeners = info["weekly"][-1]
                 info["weekly_score"] = weekly_listeners * self.listener_mult
@@ -376,14 +335,15 @@ class Draft:
                 info["monthly_score"] = monthly_listeners * self.listener_mult
                 monthly_total += monthly_listeners * self.listener_mult
                 info["yearly_total"] += weekly_listeners * self.listener_mult
-            player.set_weekly_listeners_score(weekly_total)
-            player.set_monthly_listeners_score(monthly_total)
-            player.add_total_listeners_score(weekly_total)
+            player.weekly_listeners_score = weekly_total
+            player.monthly_listeners_score = monthly_total
+            player.total_listeners_score += weekly_total
+            player.matchup_listeners_score += weekly_total
 
     def score_week_total(self):
         for player in self.get_all_players():
-            for artist in player.get_all_artists():
-                info = player.get_artists_information().get(artist)
+            for artist in player.artists:
+                info = player.artist_info.get(artist)
                 week_listeners_score = info["weekly_score"]
                 billboard_score = info["week_billboard_score"]
                 album_score = info["new_album_score"]

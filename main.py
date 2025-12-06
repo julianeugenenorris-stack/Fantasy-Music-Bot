@@ -44,10 +44,10 @@ async def create_draft(interaction: discord.Interaction, draftname: str, rounds:
         return
 
     if draft is not None:
-        await interaction.response.send_message(f"Draft {draft.get_name()} is already open.")
+        await interaction.response.send_message(f"Draft {draft.draft_name} is already open.")
         return
 
-    await interaction.response.send_message(f"Draft {draft.get_name()} was already created in the guild.\nOnly one draft per guild id.", delete_after=10, ephemeral=True)
+    await interaction.response.send_message(f"Draft {draft.draft_name} was already created in the guild.\nOnly one draft per guild id.", delete_after=10, ephemeral=True)
 
 
 @client.tree.command(name="startdraft", description="Start Music Draft", guild=GUILD_ID)
@@ -79,22 +79,22 @@ async def start_draft(interaction: discord.Interaction):
     website_arrays = get_full_artists_data()
 
     draft.next_stage()
-    draft.set_all_artists(website_arrays[0])
-    draft.set_starting_listeners(website_arrays[1])
-    draft.set_current_listeners(website_arrays[1])
+    draft.all_artists = website_arrays[0]
+    draft.starting_listeners = website_arrays[1]
+    draft.current_listeners = website_arrays[1]
 
-    draft_name = f"draft{draft.get_name()}"
+    draft_name = f"draft{draft.draft_name}"
     save_object(draft, draft_name)
 
     for p in draft.get_all_players():
-        save_object(p, f"player{p.get_id()}.txt")
+        save_object(p, f"player{p.user_id}.txt")
 
     await interaction.followup.send("Draft ready! Starting Draft Lobby.")
 
     # start draft
 
     firstPlayer = draft.get_all_players()[0]
-    user = await client.fetch_user(firstPlayer.get_id())
+    user = await client.fetch_user(firstPlayer.user_id)
     await interaction.followup.send(f"{user.mention} You are on the board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
 
 
@@ -156,13 +156,13 @@ async def join(interaction: discord.Interaction):
     user = interaction.user
     if draft is not None:
         for p in draft.get_all_players():
-            if p.get_id() == user.id:
+            if p.user_id == user.id:
                 await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
                 return
 
     draft.add_new_player(user.id, user.name)
 
-    draft_name = f"draft{draft.get_name()}"
+    draft_name = f"draft{draft.draft_name}"
     save_object(draft, draft_name)
 
     await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
@@ -183,14 +183,14 @@ async def start_season(interaction: discord.Interaction, day: int, hour: int, mi
         return
 
     if draft.is_stage([3, 4]):
-        await interaction.response.send_message(f"{draft.get_name()}'s fantasy season is already started.")
+        await interaction.response.send_message(f"{draft.draft_name}'s fantasy season is already started.")
         return
 
     if draft.is_stage([0, 1]):
-        await interaction.response.send_message(f"{draft.get_name()}'s has not drafted.")
+        await interaction.response.send_message(f"{draft.draft_name}'s has not drafted.")
         return
 
-    await interaction.response.send_message(f"Starting {draft.get_name()}'s fantasy season.")
+    await interaction.response.send_message(f"Starting {draft.draft_name}'s fantasy season.")
 
     draft.update_starting_player_listeners()
 
@@ -221,10 +221,10 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str):
             "Draft is already over.", delete_after=10, ephemeral=True)
         return
 
-    if draft.get_all_players()[draft.get_turn()].get_id() == user.id:
-        for artist in draft.get_all_artists():
+    if draft.get_all_players()[draft.turn].user_id == user.id:
+        for artist in draft.all_artists:
             if artist_selected == artist:
-                player = draft.get_all_players()[draft.get_turn()]
+                player = draft.get_all_players()[draft.turn]
 
                 if artist_selected in draft.drafted_artists:
                     await interaction.response.send_message(f"{artist_selected} has already been drafted. Draft another artist.", delete_after=10, ephemeral=True)
@@ -232,21 +232,21 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str):
 
                 await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
                 player.draft_artist(artist_selected)
-                draft.add_drafted_artists(artist_selected)
+                draft.drafted_artists.add(artist_selected)
 
                 draft.next_turn()
 
                 if draft.is_stage(1):
-                    nextPlayer = draft.get_all_players()[draft.get_turn()]
-                    user = await client.fetch_user(nextPlayer.get_id())
+                    nextPlayer = draft.get_all_players()[draft.turn]
+                    user = await client.fetch_user(nextPlayer.user_id)
 
-                    draft_name = f"draft{draft.get_name()}"
+                    draft_name = f"draft{draft.draft_name}"
                     save_object(draft, draft_name)
 
                     await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
                     return
                 else:
-                    draft_name = f"draft{draft.get_name()}"
+                    draft_name = f"draft{draft.draft_name}"
                     save_object(draft, draft_name)
 
                     await interaction.followup.send("Draft Completed.")
@@ -275,7 +275,7 @@ async def reload_draft(interaction: discord.Interaction, name: str):
             draft = load_object(f"draft{name}")
             await interaction.response.send_message(f"{name} has been reloaded.")
             if draft.is_stage(3):
-                await interaction.followup.send(f"Restarting {draft.get_name()}'s fantasy season.")
+                await interaction.followup.send(f"Restarting {draft.draft_name}'s fantasy season.")
                 client.loop.create_task(weekly_update(
                     draft, interaction))
                 return
@@ -283,15 +283,15 @@ async def reload_draft(interaction: discord.Interaction, name: str):
                 await interaction.followup.send(f"Start the fantasy season with /startseason.")
                 return
             if draft.is_stage(1):
-                nextPlayer = draft.get_all_players()[draft.get_turn()]
-                user = await client.fetch_user(nextPlayer.get_id())
+                nextPlayer = draft.get_all_players()[draft.turn]
+                user = await client.fetch_user(nextPlayer.user_id)
                 await interaction.followup.send(f"{user.mention} You Are On The Board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
             return
         except Exception as e:
             await interaction.response.send_message(f"Error: {e}", delete_after=10, ephemeral=True)
             return
     try:
-        await interaction.response.send_message(f"{draft.get_name()} has already been created.", delete_after=10, ephemeral=True)
+        await interaction.response.send_message(f"{draft.draft_name} has already been created.", delete_after=10, ephemeral=True)
         return
     except FileNotFoundError:
         await interaction.response.send_message(f"{name} is not found.", delete_after=10, ephemeral=True)
@@ -314,7 +314,7 @@ async def show_team(interaction: discord.Interaction):
 
     player = None
     for p in draft.get_all_players():
-        if p.get_id() == user.id:
+        if p.user_id == user.id:
             player = p
             break
 
@@ -371,7 +371,7 @@ async def show_artist(interaction: discord.Interaction, artist_name: str, show: 
         await interaction.response.send_message(f"Load or start a draft use.")
         return
 
-    if artist_name in draft.get_all_artists():
+    if artist_name in draft.all_artists:
         await interaction.response.defer(thinking=True)
         embed = artists_info_template(artist_name, draft)
     else:
@@ -414,7 +414,7 @@ async def show_album(interaction: discord.Interaction, show: bool | None):
 
     player = None
     for p in draft.get_all_players():
-        if p.get_id() == user.id:
+        if p.user_id == user.id:
             player = p
             break
 
@@ -454,7 +454,7 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
 
     player = None
     for p in draft.get_all_players():
-        if p.get_id() == user.id:
+        if p.user_id == user.id:
             player = p
             break
 
@@ -503,7 +503,7 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
 
     player = None
     for p in draft.get_all_players():
-        if p.get_id() == user.id:
+        if p.user_id == user.id:
             player = p
             break
 
@@ -602,14 +602,14 @@ async def draftArtist(interaction: discord.Interaction, update: bool):
 
 @client.tree.command(name="stage", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draft_artist(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Draft is at stage {draft.get_stage()}.", delete_after=10, ephemeral=True)
+    await interaction.response.send_message(f"Draft is at stage {draft.stage}.", delete_after=10, ephemeral=True)
 
 
 @client.tree.command(name="printplayerinfo", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draftArtist(interaction: discord.Interaction):
     player_info = None
     for player in draft.get_all_players():
-        player_info = player.get_artists_information()
+        player_info = player.artist_info
     print(str(player_info))
     await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
 
@@ -618,7 +618,7 @@ async def draftArtist(interaction: discord.Interaction):
 async def draftArtist(interaction: discord.Interaction, artist: str):
     player_info = None
     for player in draft.get_all_players():
-        player_info: list = player.get_artists_information()[
+        player_info: list = player.artist_info[
             artist]["albums_on_record"]
         player_info.remove(player_info[0])
     await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
