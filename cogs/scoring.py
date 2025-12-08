@@ -66,7 +66,7 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
         await interaction.followup.send("League update is completed!")
 
         if draft.week_in_season >= season_week_length:
-            # Season is over → finalize
+            # Season is over
             await interaction.followup.send("Season has ended. Finalizing results.")
             draft.next_stage()
             draft.end_season()
@@ -86,7 +86,7 @@ async def update_draft(draft: Draft, interaction):
 
         draft.all_artists = website_arrays[0]
 
-        draft.week_in_season += 1
+        draft.next_week()
 
         draft.update_weekly_listeners(website_arrays[1])
         draft.update_monthly_listeners()

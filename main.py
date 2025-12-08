@@ -7,6 +7,7 @@ from cogs.scoring import *
 from cogs.draft import Draft
 from cogs.client import start_client
 
+import random
 import discord
 from discord.ext import commands
 
@@ -92,7 +93,8 @@ async def start_draft(interaction: discord.Interaction):
     await interaction.followup.send("Draft ready! Starting Draft Lobby.")
 
     # start draft
-
+    random.shuffle(draft.draft_players)
+    draft.start_matchups()
     firstPlayer = draft.get_all_players()[0]
     user = await client.fetch_user(firstPlayer.user_id)
     await interaction.followup.send(f"{user.mention} You are on the board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
@@ -160,12 +162,18 @@ async def join(interaction: discord.Interaction, team_name: str):
                 await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
                 return
 
-    draft.add_new_player(user.id, user.name, team_name)
+    draft.add_new_player(user, user.id, user.name, team_name)
+
+    player = None
+    for p in draft.get_all_players():
+        if p.user_id == user.id:
+            player = p
+            break
 
     draft_name = f"draft{draft.draft_name}"
     save_object(draft, draft_name)
 
-    await interaction.response.send_message(f"{interaction.user.name} joined the draft.")
+    await interaction.response.send_message(f"{interaction.user.name} as joined the draft with team **{player.team_name}**.")
 
 
 @join.error
@@ -322,7 +330,7 @@ async def show_team(interaction: discord.Interaction):
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    embed = team_template(user, player, draft)
+    embed = team_template(player, draft)
 
     if type(embed) is str:
         await interaction.response.send_message(embed, delete_after=10, ephemeral=True)
@@ -341,16 +349,20 @@ async def show_teamte(ctx, error):
 
 @client.tree.command(name="billboard", description="Show a players team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_billboard(interaction: discord.Interaction, show: bool | None = True):
+async def show_billboard(interaction: discord.Interaction):
     global draft
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft use.")
         return
 
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message("Need to start draft before checking billboard", delete_after=10, ephemeral=True)
+        return
+
     await interaction.response.defer()
 
     embeds = billboard_template(draft)
-    view = BillboardView(embeds)
+    view = TemplateView(embeds)
 
     await interaction.followup.send(embed=embeds[0], view=view)
 
@@ -422,7 +434,7 @@ async def show_album(interaction: discord.Interaction, show: bool | None):
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    embed = artists_albums_template(user, player, draft)
+    embed = artists_albums_template(player)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -462,16 +474,19 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    if week is int:
-        # embed = certain_week_template(user, player, draft)
-        await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
+    if week is not None:
+        if week <= draft.week_in_season + 1:
+            embed = certain_week_template(user, player, draft, week - 1)
+        else:
+            await interaction.response.send_message("Can't look at weeks in the future.", delete_after=10, ephemeral=True)
+            return
     else:
         if time == "week":
-            embed = weekly_listeners_template(user, player, draft)
+            embed = weekly_listeners_template(player, draft)
         if time == "month":
-            embed = monthly_listeners_template(user, player, draft)
+            embed = monthly_listeners_template(player)
         if time == "total":
-            embed = total_listeners_template(user, player, draft)
+            embed = total_listeners_template(player)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -490,7 +505,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="scores", description="Show a teams scores for a certain time or time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_scores(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], type: Literal["billboard", "change", "aoty", "listeners", "all"], week: int | None, show: bool | None):
+async def show_scores(interaction: discord.Interaction, time: Literal["week", "month", "matchup", "total"], type: None | Literal["billboard", "change", "aoty", "listeners", "all"], show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -511,16 +526,21 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    if week is int:
-        # embed = certain_week_template(user, player, draft)
-        await interaction.response.send_message(f"This will score the scoring for week {time}", ephemeral=True)
-    else:
-        if time == "week":
-            embed = weekly_scores_template(user, player, draft, type)
-        if time == "matchup":
-            embed = matchup_scores_template(user, player, draft, type)
-        if time == "total":
-            embed = total_scores_template(user, player, draft, type)
+    if type is None:
+        type = "all"
+
+    if time == "week":
+        embed = weekly_scores_template(player, type)
+    if time == "matchup":
+        embed = matchup_scores_template(player)
+    if time == "total":
+        embed = total_scores_template(player, type)
+    if time == "month":
+        if type is None or type == "listeners":
+            embed = month_scores_template(player)
+        else:
+            await interaction.response.send_message("Month can only be used for listeners.", delete_after=10, ephemeral=True)
+            return
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -539,7 +559,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="overview", description="Shows overview of all players in league and their scoring totals.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_overview(interaction: discord.Interaction):
+async def show_overview(interaction: discord.Interaction, time: Literal["week", "month", "matchup", "total"], type: Literal["billboard", "change", "aoty", "listeners", "all"], show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -548,7 +568,22 @@ async def show_overview(interaction: discord.Interaction):
         await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
         return
 
-    user = interaction.user
+    await interaction.response.defer()
+
+    if time == "month":
+        if type is not None or type != "listeners":
+            await interaction.response.send_message("Month can only be used for listeners.", delete_after=10, ephemeral=True)
+            return
+
+    embeds = overview_template(draft, type, time)
+    view = TemplateView(embeds)
+
+    if show is False:
+        await interaction.followup.send(embeds=embeds, view=view, ephemeral=True)
+        return
+    else:
+        await interaction.followup.send(embeds=embeds, view=view)
+        return
 
 
 @show_team.error
@@ -603,6 +638,15 @@ async def draftArtist(interaction: discord.Interaction, update: bool):
 @client.tree.command(name="stage", description="Draft artists to fantasy team.", guild=GUILD_ID)
 async def draft_artist(interaction: discord.Interaction):
     await interaction.response.send_message(f"Draft is at stage {draft.stage}.", delete_after=10, ephemeral=True)
+
+
+@client.tree.command(name="testschedual", description="Draft artists to fantasy team.", guild=GUILD_ID)
+async def draft_artist(interaction: discord.Interaction):
+    print(f"Current Matchup {draft.week_matchups}")
+    print(f"All Matchups {draft.matchups}")
+    print(f"Matchup Week {draft.matchup_count}")
+    print(f"Week in Matchup {draft.week_in_matchup}")
+    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
 
 
 @client.tree.command(name="printplayerinfo", description="Draft artists to fantasy team.", guild=GUILD_ID)

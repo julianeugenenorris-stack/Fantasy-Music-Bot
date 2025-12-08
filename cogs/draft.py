@@ -1,6 +1,8 @@
 from cogs.player import Player
 from cogs.scraper import *
 
+import random
+
 
 class Draft:
     def __init__(
@@ -59,6 +61,16 @@ class Draft:
         self.stage: int = 0
         """0 = draft is unstarted, 1 is draft is started, 2 is draft is completed, 3 is season is started"""
 
+        self.matchups: list = []
+        """Moves clockwise and the groups are paired"""
+
+        self.week_matchups: list = []
+        """This weeks matchups"""
+        self.matchup_count: int = 0
+        """What week in the schedual it is on from 0-12"""
+
+        self.week_in_matchup: int = 0
+        """What week in the matchup it is from 0-4"""
         self.week_in_season: int = 0
         self.draft_update_time: list = []
         """weekday - hour - minute"""
@@ -92,7 +104,7 @@ class Draft:
         if listener_mult is not None:
             self.listener_mult = listener_mult
         if change_mult is not None:
-            self.change = change_mult
+            self.change_mult = change_mult
         if aoty_range is not None:
             if aoty_score is not None:
                 index = self.aoty_scoring_guide.index(aoty_range)
@@ -110,6 +122,50 @@ class Draft:
             "aoty_scoring_guide": self.aoty_scoring_guide,
             "billboard_scoring": self.billboard_scoring
         }
+
+    def next_week(self):
+        self.week_in_season += 1
+        self.week_in_matchup += 1
+        if self.week_in_matchup > 3:
+            self.week_in_matchup = 0
+            print(
+                f"New matchup for week {self.week_in_season + 1}/ Matchup {self.matchup_count}")
+            self.next_matchup()
+            print(f"New matchup: {self.week_matchups}")
+            for player in self.get_all_players():
+                player.reset_matchup()
+
+    def next_matchup(self):
+        players_versus: list = []
+        for index, player in enumerate(self.week_matchups[0]):
+            players_versus.append([player, self.week_matchups[1][index]])
+        for players in players_versus:
+            player_1: Player = players[0]
+            player_2: Player = players[1]
+            if player_1.matchup_score > player_2.matchup_score:
+                player_1.record_add_win()
+                player_2.record_add_loss()
+            elif player_1.matchup_score < player_2.matchup_score:
+                player_2.record_add_win()
+                player_1.record_add_loss()
+            else:
+                return
+        self.matchup_count += 1
+        self.week_matchups = self.matchups[self.matchup_count:self.matchup_count+1]
+
+    def start_matchups(self):
+        players: list = self.draft_players[:]
+        random.shuffle(players)  # suffle
+        sched = create_schedule(players)
+        full_sched = []
+        for week in range(0, 24):
+            try:
+                full_sched += sched[week]
+            except:
+                sched += sched
+                full_sched += sched[week]
+        self.matchups = full_sched[:]
+        self.week_matchups = full_sched[0:1]
 
     def is_stage(self, stage: int | list) -> bool:
         """0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is over
@@ -168,7 +224,7 @@ class Draft:
                 return
             self.turn += self.direction
 
-    def add_new_player(self, id: str, name: str, team):
+    def add_new_player(self, user, id: str, name: str, team):
         """Adds new player to the draft.
         :param user_id: The player's discord id.
         :type user_id: int
@@ -176,7 +232,7 @@ class Draft:
         :type name: str
         """
         self.draft_players.append(
-            Player(user_id=id, user_name=name, team_name=team))
+            Player(user_id=id, user_name=name, team_name=team, user=user))
 
     def update_starting_player_listeners(self):
         """Only used at start of season"""
@@ -196,7 +252,6 @@ class Draft:
             weekly_total = 0
 
             for artist in player.artists:
-                player.ensure_artist(artist)
 
                 idx = artist_index.get(artist, None)
                 listeners = weekly_listener_data[idx] if idx is not None else 0
@@ -213,7 +268,6 @@ class Draft:
 
             for artist in player.artists:
                 listeners = player.artist_info[artist]["weekly"]
-                player.ensure_artist(artist)
 
                 # last 4 weeks = "month"
                 recent = listeners[-4:]
@@ -262,7 +316,7 @@ class Draft:
             weekly_billboard_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
-                temp_billboard_score += info["total_billboard_score"]
+                weekly_billboard_score += info["total_billboard_score"]
             player.total_billboard_score += weekly_billboard_score
             player.matchup_billboard_score += weekly_billboard_score
             player.weeks_billboard_score = weekly_billboard_score
@@ -278,9 +332,10 @@ class Draft:
                 start_listeners = info["starting_listeners"]
                 change_listeners = weekly_listeners - start_listeners
                 change_total_listeners += change_listeners
-                info["listeners_change"] = change_listeners * self.change_mult
+                info["listeners_change"] = change_listeners
                 change_total_score += change_listeners * self.change_mult
                 info["score_change"] = change_listeners * self.change_mult
+                info["total_score_change"] += change_listeners * self.change_mult
             player.total_change_score += change_total_score
             player.matchup_change_score += change_total_score
             player.weeks_change_score = change_total_score
@@ -307,6 +362,7 @@ class Draft:
                             min_val = int(score_range[:-1])
                             if album_score >= min_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
+                                info["total_album_score"] += self.aoty_scoring[index]
                                 weekly_score += self.aoty_scoring[index]
                                 break
 
@@ -315,6 +371,7 @@ class Draft:
                             max_val = int(score_range[:-1])
                             if album_score <= max_val:
                                 info["new_album_score"] = self.aoty_scoring[index]
+                                info["total_album_score"] += self.aoty_scoring[index]
                                 weekly_score += self.aoty_scoring[index]
                                 break
 
@@ -323,6 +380,7 @@ class Draft:
                             start, end = map(int, score_range.split("-"))
                             if start >= album_score >= end:
                                 info["new_album_score"] = self.aoty_scoring[index]
+                                info["total_album_score"] += self.aoty_scoring[index]
                                 weekly_score += self.aoty_scoring[index]
                                 break
             player.weeks_aoty_score = weekly_score
@@ -368,3 +426,30 @@ class Draft:
     def end_season():
         print("End season")
         return
+
+
+def create_schedule(list: list):
+    """ Create a schedule for the teams in the list and return it"""
+    s = []
+
+    if len(list) % 2 == 1:
+        list = list + ["BYE"]
+
+    for i in range(len(list)-1):
+
+        mid = int(len(list) / 2)
+        l1 = list[:mid]
+        l2 = list[mid:]
+        l2.reverse()
+
+        # Switch sides after each round
+        if (i % 2 == 1):
+            s = s + [l1, l2]
+        else:
+            s = s + [l2, l1]
+
+        list.insert(1, list.pop())
+
+    print(s[:])
+
+    return s
