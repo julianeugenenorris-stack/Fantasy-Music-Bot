@@ -25,8 +25,9 @@ class Player:
 
         # listeners for embeds
         self.total_listeners = 0
+        self.matchup_listeners = 0
         self.weekly_listeners = 0
-        self.total_change_listeners = 0
+        self.weekly_change_listeners = 0
 
         # total season long scores for all artists
         self.total_listeners_score = 0
@@ -70,6 +71,14 @@ class Player:
         self.matchup_billboard_score = 0
         self.matchup_change_score = 0
         self.matchup_score = 0
+        self.matchup_listeners = 0
+        for artist in self.artists:
+            info = self.artist_info.get(artist)
+            info["matchup_listeners_score"] = 0
+            info["matchup_album_score"] = 0
+            info["matchup_change_score"] = 0
+            info["matchup_total_score"] = 0
+            info["matchup_billboard_score"] = 0
 
     def draft_artist(self, name: str):
         self.artists.append(name)
@@ -83,6 +92,7 @@ class Player:
             # listeners information
             "starting_listeners": None,
             "weekly": [],
+            "matchup": [],
             "yearly_listeners_total": 0,
 
             # listeners score

@@ -28,15 +28,13 @@ def create_schedule(list: list):
     return s
 
 
-players: list = ["Player 1", "Player 2", "Player 3",
-                 "Player 4", "Player 5", "Player 6", "Player 7", "Player 8", "Player 9",
-                 "Player 10", "Player 11", "Player 12", "Player 13"]
+players: list = ["Player 1", "Player 2"]
 random.shuffle(players)  # suffle
-print(players)
 count = 0
 sched = create_schedule(players)
 full_sched = []
 for week in range(0, 24):
+
     try:
         full_sched += sched[week]
         print(sched[week])
@@ -47,5 +45,14 @@ for week in range(0, 24):
         print(sched[week])
         count += 0.5
 
+print(full_sched)
 
-print(count)
+players: list = ["Player 1", "Player 2"]
+random.shuffle(players)  # suffle
+sched = create_schedule(players)
+full_sched = []
+for week in range(0, 24):
+    full_sched.append(sched[week % len(sched)])
+
+
+print(full_sched)

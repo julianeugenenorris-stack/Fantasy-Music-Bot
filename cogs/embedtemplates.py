@@ -163,63 +163,177 @@ def overview_template(draft: Draft, type, time):
     embeds = []
 
     for player in draft.draft_players:
-        if time is "total":
+        if time == "total":
             embeds.append(total_scores_template(player, type))
-        if time is "week":
+        if time == "week":
             embeds.append(weekly_scores_template(player, type))
-        if time is "matchup":
+        if time == "matchup":
             embeds.append(matchup_scores_template(player, type))
 
     return embeds
 
 
-def show_matchup(draft: Draft, player: Player):
+def matchup_template(draft: Draft, type):
+    embeds = []
+
+    for player in draft.matchups[draft.matchup_count]:
+        build_player_matchup(draft, player, type)
+
+    return embeds
+
+
+def build_player_matchup(draft: Draft, player: Player | str, type: str):
     index_player = draft.matchups[draft.matchup_count].index(player)
+    players = [draft.matchups[draft.matchup_count][index_player],
+               draft.matchups[draft.matchup_count + 1][index_player]]
+    if "BYE" in index_player:
+        embed = discord.Embed(
+            title=f"{index_player[0].team_name}** is on bye.",
+            color=discord.Color.dark_grey(),
+        )
+        return embed
 
     embed = discord.Embed(
-        title=f"Matchup {index_player[0].team_name} vs {index_player[1].team_name}",
+        title=f"Matchup **{players[0].team_name}** vs **{players[1].team_name}**",
         color=discord.Color.dark_grey(),
     )
-
-    for player in index_player:
-        artist_scores = player.artist_info
-        if not artist_scores:
+    if type == "all":
+        for player in players:
             embed.add_field(
-                name="No Scores Found",
-                value="This player has no artist data yet.",
+                name=f"Matchup Billboard Score:",
+                value=f"{player.matchup_billboard_score:.2f}",
                 inline=True
             )
-            return embed
 
-        embed.add_field(
-            name=f"Matchup Billboard Score:",
-            value=f"{player.matchup_billboard_score:.2f}",
-            inline=True
-        )
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Album Score:",
+                value=f"{player.matchup_aoty_score:.2f}",
+                inline=True
+            )
 
-        embed.add_field(
-            name=f"Matchup Album Score:",
-            value=f"{player.matchup_aoty_score:.2f}",
-            inline=True
-        )
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Listeners Score:",
+                value=f"{player.matchup_listeners_score:.2f}",
+                inline=True
+            )
 
-        embed.add_field(
-            name=f"Matchup Listeners Score:",
-            value=f"{player.matchup_listeners_score:.2f}",
-            inline=True
-        )
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Change Score:",
+                value=f"{player.matchup_change_score:.2f}",
+                inline=True
+            )
 
-        embed.add_field(
-            name=f"Matchup Change Score:",
-            value=f"{player.matchup_change_score:.2f}",
-            inline=True
-        )
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Score Combined:",
+                value=f"{player.matchup_score:.2f}",
+                inline=True
+            )
+    if type == "billboard":
 
-        embed.add_field(
-            name=f"Matchup Score Combined:",
-            value=f"{player.matchup_score:.2f}",
-            inline=True
-        )
+        for player in players:
+            for artist in player.artists:
+                total_scores = player.artist_info.get("total_billboard_score")
+
+                if total_scores != 0:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Matchup Billboard Score: {total_scores:,.2f}",
+                        inline=True
+                    )
+                else:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Has no billboard songs.",
+                        inline=True
+                    )
+
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Total Billboard Score:",
+                value=f"{player.matchup_billboard_score:.2f}",
+                inline=True
+            )
+
+    if type == "aoty":
+        for player in players:
+            for artist in player.artists:
+                total_scores = player.artist_info.get("matchup_album_score")
+
+                if total_scores != 0:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Matchup Album Score: {total_scores:,.2f}",
+                        inline=True
+                    )
+                else:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Has no new albums.",
+                        inline=True
+                    )
+
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Total Billboard Score:",
+                value=f"{player.matchup_billboard_score:.2f}",
+                inline=True
+            )
+
+    if type == "listeners":
+        for player in players:
+            for artist in player.artists:
+                total_scores = player.artist_info.get(
+                    "matchup_listeners_score")
+
+                if total_scores != 0:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Matchup Listeners Score: {total_scores:,.2f}",
+                        inline=True
+                    )
+                else:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Has no new albums.",
+                        inline=True
+                    )
+
+        for player in players:
+            embed.add_field(
+                name=f"Total Listeners Score:",
+                value=f"{player.total_billboard_score:.2f}",
+                inline=True
+            )
+
+    if type == "change":
+        for player in players:
+            for artist in player.artists:
+                total_scores = player.artist_info.get(
+                    "matchup_change_score")
+
+                if total_scores != 0:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Matchup Change Score: {total_scores:,.2f}",
+                        inline=True
+                    )
+                else:
+                    embed.add_field(
+                        name=f"{artist}:",
+                        value=f"Has no change.",
+                        inline=True
+                    )
+
+        for player in players:
+            embed.add_field(
+                name=f"Matchup Total Change Score:",
+                value=f"{player.total_change_score:.2f}",
+                inline=True
+            )
 
     return embed
 
@@ -269,67 +383,87 @@ def new_league_albums_template(draft: Draft):
     return embed
 
 
-def weekly_listeners_template(player: Player, draft: Draft):
+def listeners_template(player: Player, draft: Draft, type: str):
     embed = discord.Embed(
-        title=f"Team **{player.team_name}**'s Listeners Last Week",
+        title=f"Team **{player.team_name}**'s Listeners This {type.capitalize}" if type != "total" else f"Team **{player.team_name}**'s {type.capitalize} Listeners ",
         color=discord.Color.blue(),
     )
 
     embed.set_thumbnail(url=player.user_image)
-    embed.set_footer(
-        text=f"# is listeners counted this in week {draft.week_in_season}.")
 
     artist_info = player.artist_info
 
-    for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
+    if type == "week":
+        embed.set_footer(
+            text=f"# is listeners counted this in week {draft.week_in_season}.")
 
-        # safely get weekly score
-        weekly = data.get("weekly")
+        for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
+
+            # safely get weekly score
+            weekly = data.get("weekly")
+
+            embed.add_field(
+                name=f"{count}: {artist_name}",
+                value=f"{weekly[len(weekly)-1]:,}",
+                inline=False
+            )
 
         embed.add_field(
-            name=f"{count}: {artist_name}",
-            value=f"{weekly[len(weekly)-1]:,}",
+            name=f"Total Weekly Listeners:",
+            value=f"{player.weekly_listeners:,}",
             inline=False
         )
 
-    embed.add_field(
-        name=f"Total Weekly Listeners:",
-        value=f"{player.weekly_listeners:,}",
-        inline=False
-    )
+        return embed
+    elif type == "matchup":
+        embed.set_footer(
+            text=f"# is listeners counted this in matchup {draft.matchup_count+1}.")
 
-    return embed
+        for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
 
+            # safely get weekly score
+            matchup = data.get("matchup")
 
-def total_listeners_template(player: Player):
-    embed = discord.Embed(
-        title=f"Team **{player.team_name}**'s Total Listeners",
-        color=discord.Color.blue(),
-    )
+            listeners = 0
+            for week in matchup:
+                listeners += week
 
-    embed.set_thumbnail(url=player.user_image)
-    embed.set_footer(text="# is listeners.")
-
-    artist_info = player.artist_info
-
-    for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
-
-        # safely get weekly score
-        yearly = data.get("yearly_total")
+            embed.add_field(
+                name=f"{count}: {artist_name}",
+                value=f"{listeners:, }",
+                inline=False
+            )
 
         embed.add_field(
-            name=f"{count}: {artist_name}",
-            value=f"{int(yearly):,}",
+            name=f"Total Matchup Listeners:",
+            value=f"{player.matchup_listeners:,}",
             inline=False
         )
 
-    embed.add_field(
-        name=f"Total Listeners:",
-        value=f"{player.total_listeners:,}",
-        inline=False
-    )
+        return embed
+    elif type == "total":
+        embed.set_footer(text="# is listeners.")
 
-    return embed
+        artist_info = player.artist_info
+
+        for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
+
+            # safely get weekly score
+            yearly = data.get("yearly_total")
+
+            embed.add_field(
+                name=f"{count}: {artist_name}",
+                value=f"{int(yearly):,}",
+                inline=False
+            )
+
+        embed.add_field(
+            name=f"Total Listeners:",
+            value=f"{player.total_listeners:,}",
+            inline=False
+        )
+
+        return embed
 
 # "billboard", "change", "aoty", "listeners", "all"
 
@@ -790,7 +924,7 @@ def certain_week_template(player: Player, week):
     return embed
 
 
-def matchup_scores_template(player: Player):
+def matchup_scores_template(player: Player, type: str):
     embed = discord.Embed(
         title=f"Team **{player.team_name}**'s {type.capitalize()} Score In Matchup",
         color=discord.Color.green(),
