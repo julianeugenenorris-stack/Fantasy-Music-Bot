@@ -413,7 +413,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="albums", description="Show all albums for each artist on team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_album(interaction: discord.Interaction, show: bool | None):
+async def show_album(interaction: discord.Interaction, time: Literal["mine", "league"], show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -434,7 +434,10 @@ async def show_album(interaction: discord.Interaction, show: bool | None):
         await interaction.response.send_message("You are not in this draft.", delete_after=10, ephemeral=True)
         return
 
-    embed = artists_albums_template(player)
+    if time == "mine":
+        embed = artists_albums_template(player)
+    else:
+        embed = new_league_albums_template(draft)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -453,7 +456,7 @@ async def mycommand_error(ctx, error):
 
 @client.tree.command(name="listeners", description="Show a teams listeners for a certain time or time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_listeners(interaction: discord.Interaction, time: Literal["week", "month", "total"], week: int | None, show: bool | None):
+async def show_listeners(interaction: discord.Interaction, time: Literal["week", "total"], week: int | None, show: bool | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -483,8 +486,6 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
     else:
         if time == "week":
             embed = weekly_listeners_template(player, draft)
-        if time == "month":
-            embed = monthly_listeners_template(player)
         if time == "total":
             embed = total_listeners_template(player)
 
@@ -532,15 +533,9 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
     if time == "week":
         embed = weekly_scores_template(player, type)
     if time == "matchup":
-        embed = matchup_scores_template(player)
+        embed = matchup_scores_template(player, type)
     if time == "total":
         embed = total_scores_template(player, type)
-    if time == "month":
-        if type is None or type == "listeners":
-            embed = month_scores_template(player)
-        else:
-            await interaction.response.send_message("Month can only be used for listeners.", delete_after=10, ephemeral=True)
-            return
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -587,7 +582,7 @@ async def show_overview(interaction: discord.Interaction, time: Literal["week", 
 
 
 @show_team.error
-async def mycommand_error(ctx, error):
+async def show_overview(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -606,6 +601,13 @@ async def trade(interaction: discord.Interaction):
 
     user = interaction.user
 
+
+@show_team.error
+async def trade(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
 
 """
 TESTING COMMANDS

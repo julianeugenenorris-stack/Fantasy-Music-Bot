@@ -89,7 +89,6 @@ async def update_draft(draft: Draft, interaction):
         draft.next_week()
 
         draft.update_weekly_listeners(website_arrays[1])
-        draft.update_monthly_listeners()
         draft.update_total_listeners()
 
         await interaction.followup.send("Weekly league information loaded...")

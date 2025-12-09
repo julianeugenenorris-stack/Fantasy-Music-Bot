@@ -263,18 +263,6 @@ class Draft:
             player.weekly_listeners = weekly_total
             player.total_listeners += weekly_total
 
-    def update_monthly_listeners(self):
-        for player in self.get_all_players():
-
-            for artist in player.artists:
-                listeners = player.artist_info[artist]["weekly"]
-
-                # last 4 weeks = "month"
-                recent = listeners[-4:]
-
-                monthly_total = sum(recent)
-                player.artist_info[artist]["monthly"].append(monthly_total)
-
     def update_total_listeners(self):
         for player in self.get_all_players():
             for artist in player.artists:
@@ -316,7 +304,7 @@ class Draft:
             weekly_billboard_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
-                weekly_billboard_score += info["total_billboard_score"]
+                weekly_billboard_score += info["week_billboard_score"]
             player.total_billboard_score += weekly_billboard_score
             player.matchup_billboard_score += weekly_billboard_score
             player.weeks_billboard_score = weekly_billboard_score
@@ -332,9 +320,9 @@ class Draft:
                 start_listeners = info["starting_listeners"]
                 change_listeners = weekly_listeners - start_listeners
                 change_total_listeners += change_listeners
-                info["listeners_change"] = change_listeners
+                info["week_listeners_change"] = change_listeners
                 change_total_score += change_listeners * self.change_mult
-                info["score_change"] = change_listeners * self.change_mult
+                info["week_score_change"] = change_listeners * self.change_mult
                 info["total_score_change"] += change_listeners * self.change_mult
             player.total_change_score += change_total_score
             player.matchup_change_score += change_total_score
@@ -354,7 +342,7 @@ class Draft:
                     album_score = get_most_recent_album_user_score(
                         info["id_aoty"])
                     album_score = int(album_score)
-                    info["new_album_aoty_score"] = album_score
+                    info["week_album_score"] = album_score
 
                     for index, score_range in enumerate(self.aoty_scoring_guide):
                         # Case 1: "90+"
@@ -383,6 +371,8 @@ class Draft:
                                 info["total_album_score"] += self.aoty_scoring[index]
                                 weekly_score += self.aoty_scoring[index]
                                 break
+                else:
+                    info["new_album_name"] = ""
             player.weeks_aoty_score = weekly_score
             player.matchup_aoty_score += weekly_score
             player.total_aoty_score += weekly_score
@@ -395,11 +385,14 @@ class Draft:
                 info = player.artist_info.get(artist)
                 monthly_listeners = info["monthly"][-1]
                 weekly_listeners = info["weekly"][-1]
-                info["weekly_score"] = weekly_listeners * self.listener_mult
+                week_listeners_score = weekly_listeners * self.listener_mult
+                info["weekly_listeners_score"] = week_listeners_score
+                info["matchup_listeners_score"] += week_listeners_score
+                info["yearly_listeners_total"] += week_listeners_score
                 weekly_total += weekly_listeners * self.listener_mult
-                info["monthly_score"] = monthly_listeners * self.listener_mult
+                info["monthly_listeners_score"] = monthly_listeners * \
+                    self.listener_mult
                 monthly_total += monthly_listeners * self.listener_mult
-                info["yearly_total"] += weekly_listeners * self.listener_mult
             player.weeks_listener_score = weekly_total
             player.monthly_listeners_score = monthly_total
             player.total_listeners_score += weekly_total
@@ -416,12 +409,15 @@ class Draft:
                 player.matchup_change_score
             for artist in player.artists:
                 info = player.artist_info.get(artist)
-                week_listeners_score = info["weekly_score"]
+                week_listeners_score = info["weekly_listeners_score"]
                 billboard_score = info["week_billboard_score"]
-                album_score = info["new_album_score"]
-                change_score = info["score_change"]
-                info["week_total_score"] = week_listeners_score + \
+                album_score = info["week_album_score"]
+                change_score = info["week_score_change"]
+                weeks_total_score = week_listeners_score + \
                     billboard_score + album_score + change_score
+                info["week_total_score"] = weeks_total_score
+                info["matchup_total_score"] += weeks_total_score
+                info["year_total_score"] += weeks_total_score
 
     def end_season():
         print("End season")
