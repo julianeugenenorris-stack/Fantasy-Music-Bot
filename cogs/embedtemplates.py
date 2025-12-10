@@ -10,11 +10,10 @@ WEEK_MONTH_CONVER = 4.34524
 
 class TemplateView(View):
     def __init__(self, embeds):
-        super().__init__(timeout=120)  # 2 minutes, adjust if needed
+        super().__init__(timeout=120)  # 2 minutes
         self.embeds = embeds
         self.index = 0
 
-        # Disable previous at start
         self.update_buttons()
 
     def update_buttons(self):
@@ -184,9 +183,41 @@ def schedule_template(draft: Draft, players, type: str):
     return embeds
 
 
+def build_schedule_season_template(draft_week_players, week_number):
+    embed = discord.Embed(
+        title=f"All Matchups — Matchup {week_number}",
+        color=discord.Color.dark_grey(),
+    )
+
+    for p1, p2 in draft_week_players:
+        name1 = p1.team_name if p1 else "BYE"
+        name2 = p2.team_name if p2 else "BYE"
+        rec1 = f"{p1.record[0]}-{p1.record[1]}" if p1 else ""
+        rec2 = f"{p2.record[0]}-{p2.record[1]}" if p2 else ""
+
+        embed.add_field(
+            name=f"{name1}",
+            value=f"{p1.name if p1 else ''} {rec1}",
+            inline=True
+        )
+        embed.add_field(
+            name=f"{name2}",
+            value=f"{p2.name if p2 else ''} {rec2}",
+            inline=True
+        )
+        embed.add_field(
+            name="",
+            value="",
+            inline=False
+        )
+
+    return embed
+
+
 def build_schedule_template(draft: Draft):
     embed = discord.Embed(
-        title=f"All Matchups This Week.",
+        title=f"Current Matchups.",
+        description=F"For week {draft.week_in_matchup} in matchup {draft.matchup_count+1}",
         color=discord.Color.dark_grey(),
     )
 
@@ -212,6 +243,67 @@ def build_schedule_template(draft: Draft):
     return embed
 
 
+def build_trade_template(player: Player, artist_1: str | None, artist_2: str | None, artist_3: str | None, send_artist_1: str | None, send_artist_2: str | None, send_artist_3: str | None):
+    embed = discord.Embed(
+        title=f"{player.name} Has Sent You A Trade",
+        description=F"To Accept Type \"ACCEPT\" plus the name of the user.\nLike \"ACCEPT bobby\"",
+        color=discord.Color.dark_grey(),
+    )
+
+    embed.set_footer(text=f"{player.name} sends\t-\t You receive")
+
+    embed.add_field(
+        name=f"{send_artist_1}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_1}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
+    if artist_2 is None:
+        return embed
+    embed.add_field(
+        name=f"{send_artist_2}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_2}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
+    if artist_3 is None:
+        return embed
+    embed.add_field(
+        name=f"{send_artist_3}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_3}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
+    return embed
+
+
 def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
     if isinstance(p1, str) or isinstance(p2, str):
         return discord.Embed(title="This player or thier opponent is on a BYE week.", color=discord.Color.dark_grey())
@@ -219,6 +311,7 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
     players = [p1, p2]
     embed = discord.Embed(
         title=f"Matchup: **{p1.team_name}** vs **{p2.team_name}**",
+        description=f"{p1.name} - {p2.name} for scoring type {type.capitalize()}.",
         color=discord.Color.dark_grey(),
     )
     if type == "all":
@@ -274,11 +367,11 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
                 value=f"{player.matchup_score:.2f}",
                 inline=True
             )
+        return embed
     if type == "billboard":
-        for index, p1_artist in enumerate(p1.artist_info):
-            p2_artist = p2.artist_info[index]
-            p1_matchup_scores = p1_artist.get("total_billboard_score")
-            p2_matchup_scores = p2_artist.get("total_billboard_score")
+        for p1_info, p2_info, p1_artist, p2_artist in zip(p1.artist_info.values(), p2.artist_info.values(), p1.artist_info, p2.artist_info):
+            p1_matchup_scores = p1_info["matchup_billboard_score"]
+            p2_matchup_scores = p2_info["matchup_billboard_score"]
 
             embed.add_field(
                 name=f"{p1_artist}:",
@@ -302,50 +395,54 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
                 value=f"{player.matchup_billboard_score:.2f}",
                 inline=True
             )
-
+        return embed
     if type == "aoty":
-        for player in players:
-            for artist in player.artists:
-                total_scores = player.artist_info.get("matchup_album_score")
+        for p1_info, p2_info, p1_artist, p2_artist in zip(p1.artist_info.values(), p2.artist_info.values(), p1.artist_info, p2.artist_info):
+            p1_matchup_scores = p1_info["matchup_album_score"]
+            p2_matchup_scores = p2_info["matchup_album_score"]
 
-                if total_scores != 0:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Matchup Album Score: {total_scores:,.2f}",
-                        inline=True
-                    )
-                else:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Has no new albums.",
-                        inline=True
-                    )
-
-        for player in players:
             embed.add_field(
-                name=f"Matchup Total Billboard Score:",
-                value=f"{player.matchup_billboard_score:.2f}",
+                name=f"{p1_artist}:",
+                value=f"Matchup Album Score: {p1_matchup_scores:,.2f}",
                 inline=True
             )
-
-    if type == "listeners":
+            embed.add_field(
+                name=f"{p2_artist}:",
+                value=f"Matchup Album Score: {p2_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"",
+                value=f"",
+                inline=False
+            )
         for player in players:
-            for artist in player.artists:
-                total_scores = player.artist_info.get(
-                    "matchup_listeners_score")
+            embed.add_field(
+                name=f"Matchup Total Album Score:",
+                value=f"{player.matchup_aoty_score:.2f}",
+                inline=True
+            )
+        return embed
+    if type == "listeners":
+        for p1_info, p2_info, p1_artist, p2_artist in zip(p1.artist_info.values(), p2.artist_info.values(), p1.artist_info, p2.artist_info):
+            p1_matchup_scores = p1_info["matchup_listeners_score"]
+            p2_matchup_scores = p2_info["matchup_listeners_score"]
 
-                if total_scores != 0:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Matchup Listeners Score: {total_scores:,.2f}",
-                        inline=True
-                    )
-                else:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Has no new albums.",
-                        inline=True
-                    )
+            embed.add_field(
+                name=f"{p1_artist}:",
+                value=f"Matchup Listeners Score: {p1_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"{p2_artist}:",
+                value=f"Matchup Listeners Score: {p2_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"",
+                value=f"",
+                inline=False
+            )
 
         for player in players:
             embed.add_field(
@@ -353,25 +450,27 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
                 value=f"{player.total_billboard_score:.2f}",
                 inline=True
             )
-
+        return embed
     if type == "change":
-        for player in players:
-            for artist in player.artists:
-                total_scores = player.artist_info.get(
-                    "matchup_change_score")
+        for p1_info, p2_info, p1_artist, p2_artist in zip(p1.artist_info.values(), p2.artist_info.values(), p1.artist_info, p2.artist_info):
+            p1_matchup_scores = p1_info["matchup_change_score"]
+            p2_matchup_scores = p2_info["matchup_change_score"]
 
-                if total_scores != 0:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Matchup Change Score: {total_scores:,.2f}",
-                        inline=True
-                    )
-                else:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Has no change.",
-                        inline=True
-                    )
+            embed.add_field(
+                name=f"{p1_artist}:",
+                value=f"Matchup Change Score: {p1_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"{p2_artist}:",
+                value=f"Matchup Change Score: {p2_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"",
+                value=f"",
+                inline=False
+            )
 
         for player in players:
             embed.add_field(
@@ -379,8 +478,7 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
                 value=f"{player.total_change_score:.2f}",
                 inline=True
             )
-
-    return embed
+        return embed
 
 
 def artists_albums_template(player: Player):
@@ -430,7 +528,7 @@ def new_league_albums_template(draft: Draft):
 
 def listeners_template(player: Player, draft: Draft, time: str):
     embed = discord.Embed(
-        title=f"Team **{player.team_name}**'s Listeners This {time.capitalize}" if type != "total" else f"Team **{player.team_name}**'s {time.capitalize} Listeners ",
+        title=f"Team **{player.team_name}**'s Listeners This {time.capitalize()}" if type != "total" else f"Team **{player.team_name}**'s {time.capitalize()} Listeners ",
         color=discord.Color.blue(),
     )
 
@@ -449,7 +547,7 @@ def listeners_template(player: Player, draft: Draft, time: str):
 
             embed.add_field(
                 name=f"{count}: {artist_name}",
-                value=f"{weekly[len(weekly)-1]:,}",
+                value=f"{weekly[-1]:,}",
                 inline=False
             )
 
@@ -470,7 +568,7 @@ def listeners_template(player: Player, draft: Draft, time: str):
 
             embed.add_field(
                 name=f"{count}: {artist_name}",
-                value=f"{matchup:, }",
+                value=f"{matchup:,}",
                 inline=False
             )
 
@@ -488,7 +586,6 @@ def listeners_template(player: Player, draft: Draft, time: str):
 
         for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
 
-            # safely get weekly score
             yearly = data.get("yearly_total")
 
             embed.add_field(

@@ -1,61 +1,77 @@
-import random
+
+def add_artists(dictionary, name, test_number: int):
+    dictionary[name] = {
+        # general artist info
+        "albums_on_record": ["WEWE", "WWWe"],
+        "id_aoty": test_number,
+        "picked": True,
+
+        # listeners information
+        "starting_listeners": None,
+        "weekly": [],
+        "matchup_listeners": test_number,
+        "yearly_listeners_total": test_number,
+
+        # listeners score
+        "weekly_listeners_score": test_number,
+        "matchup_listeners_score": test_number,
+        "total_listeners_score": test_number,
+
+        # album score information
+        "new_album_score": test_number,
+        "new_album_name": "",
+
+        # album score
+        "week_album_score": test_number,
+        "matchup_album_score": test_number,
+        "total_album_score": test_number,
+
+        # billboard score information
+        "songs_on_billboard": [],
+
+        # billboard scores
+        "week_billboard_score": test_number,
+        "matchup_billboard_score": test_number,
+        "total_billboard_score": test_number,
+
+        # change scores information
+        "week_listeners_change": test_number,
+
+        # change scores
+        "week_score_change": test_number,
+        "matchup_change_score": test_number,
+        "total_score_change": test_number,
+
+        # year long artist scores
+        "week_total_score": test_number,
+        "matchup_total_score": test_number,
+        "year_total_score": test_number
+    }
 
 
-def create_schedule(list: list):
-    """ Create a schedule for the teams in the list and return it"""
-    s = []
+p1_artists = {}
+add_artists(p1_artists, "kys", 88)
+add_artists(p1_artists, "cool", 3)
+add_artists(p1_artists, "ponster", 91)
+p2_artists = {}
+add_artists(p2_artists, "john", 10)
+add_artists(p2_artists, "nice", 170)
+add_artists(p2_artists, "wew", 7)
 
-    if len(list) % 2 == 1:
-        list = list + ["BYE"]
-
-    for i in range(len(list)-1):
-
-        mid = int(len(list) / 2)
-        l1 = list[:mid]
-        l2 = list[mid:]
-        l2.reverse()
-
-        # Switch sides after each round
-        if (i % 2 == 1):
-            s = s + [l1, l2]
-        else:
-            s = s + [l2, l1]
-
-        list.insert(1, list.pop())
-
-    print(s[:])
-
-    return s
+# print(p1_artists)
+# print(p2_artists)
 
 
-def create_schedule(teams: list):
-    """Creates a round-robin schedule with proper matchups."""
-    n = len(teams)
-    if n % 2 == 1:
-        teams = teams + ["BYE"]
-
-    teams = teams[:]  # prevent mutating original list
-    n = len(teams)
-
-    schedule = []
-
-    for _ in range(n - 1):
-        mid = n // 2
-
-        left = teams[:mid]
-        right = teams[mid:]
-        right = right[::-1]
-
-        week = []
-        for a, b in zip(left, right):
-            week.append((a, b))  # proper matchup tuple
-
-        schedule.append(week)
-
-        # rotate
-        teams = [teams[0]] + teams[-1:] + teams[1:-1]
-
-    return schedule
+def swap_artists(player_1: dict, player_2: dict, artist_1, artist_2):
+    player_1[artist_2] = player_2.pop(artist_2)
+    player_2[artist_1] = player_1.pop(artist_1)
+    print(player_1)
+    print(f"\n\n")
+    print(player_2)
+    return None
 
 
-print(full_sched)
+swap_artists(p1_artists, p2_artists, "cool", "john")
+
+# print(p1_artists)
+# print(p2_artists)

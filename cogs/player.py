@@ -23,6 +23,11 @@ class Player:
                 }
         """
 
+        # variables for trades
+        self.trades_sent: int = 0
+        self.trade_pieces: list = []
+        """number of trades sent, can only have 1 sent at a time"""
+
         # listeners for embeds
         self.total_listeners = 0
         self.matchup_listeners = 0

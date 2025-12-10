@@ -34,6 +34,9 @@ class Draft:
         """List of player names."""
         self.draft_name: str = name
 
+        # for trades
+        self.trade_offers: list = []
+
         # for the draft sequencing
         self.turn: int = 0
         self.direction: int = 1
@@ -67,12 +70,12 @@ class Draft:
         self.week_matchups: list = []
         """This weeks matchups"""
         self.matchup_count: int = 0
-        """What week on schedual it is """
+        """How many matchups have been played 0-whatever for indexes"""
 
         self.total_matchups: int = 0
-        """What week on schedual it is """
+        """How many matchups have been played 1-whatever"""
         self.week_in_matchup: int = 0
-        """What week in the matchup it is from 0-4"""
+        """What week in the matchup it is from 0-3"""
         self.week_in_season: int = 0
         self.draft_update_time: list = []
         """weekday - hour - minute"""
@@ -134,7 +137,7 @@ class Draft:
                 f"New matchup for week {self.week_in_season + 1}/ Matchup {self.matchup_count}")
             self.next_matchup()
             print(f"New matchup: {self.week_matchups}")
-            for player in self.get_all_players():
+            for player in self.draft_players:
                 player.reset_matchup()
 
     def generate_matchups(self) -> list:
@@ -257,9 +260,6 @@ class Draft:
         """
         return len(self.draft_players)
 
-    def get_all_players(self):
-        return [p for p in self.draft_players if isinstance(p, Player)]
-
     def get_update_time(self):
         return self.draft_update_time
 
@@ -295,7 +295,7 @@ class Draft:
     def update_starting_player_listeners(self):
         """Only used at start of season"""
         self.starting_listeners = self.current_listeners
-        for player in self.get_all_players():
+        for player in self.draft_players:
             for artist in player.artists:
                 info = player.artist_info.get(artist)
                 index = self.all_artists.index(artist)
@@ -306,7 +306,7 @@ class Draft:
         artist_index = {name: i for i,
                         name in enumerate(self.all_artists)}
 
-        for player in self.get_all_players():
+        for player in self.draft_players:
             weekly_total = 0
 
             for artist in player.artists:
@@ -324,7 +324,7 @@ class Draft:
             player.total_listeners += weekly_total
 
     def update_total_listeners(self):
-        for player in self.get_all_players():
+        for player in self.draft_players:
             for artist in player.artists:
                 listeners = player.artist_info[artist]["weekly"]
                 yearly_total = sum(listeners)
@@ -335,7 +335,7 @@ class Draft:
 
         artist_to_players = {}
 
-        for player in self.get_all_players():
+        for player in self.draft_players:
             for artist in player.artists:
                 artist_to_players.setdefault(artist, []).append(player)
                 info = player.artist_info.get(artist)
@@ -361,7 +361,7 @@ class Draft:
                         info["songs_on_billboard"].append(
                             self.billboard_current_songs[0][rank])
 
-        for player in self.get_all_players():
+        for player in self.draft_players:
             weekly_billboard_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
@@ -371,7 +371,7 @@ class Draft:
             player.weeks_billboard_score = weekly_billboard_score
 
     def score_change(self):  # total_score_change
-        for player in self.get_all_players():
+        for player in self.draft_players:
             player.weekly_change_listeners = 0
             change_total_score = 0
             for artist in player.artists:
@@ -390,7 +390,7 @@ class Draft:
             player.weeks_change_score = change_total_score
 
     def score_aoty(self):
-        for player in self.get_all_players():
+        for player in self.draft_players:
             weekly_score = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
@@ -441,7 +441,7 @@ class Draft:
             player.total_aoty_score += weekly_score
 
     def score_listeners(self):
-        for player in self.get_all_players():
+        for player in self.draft_players:
             weekly_total = 0
             for artist in player.artists:
                 info = player.artist_info.get(artist)
@@ -457,7 +457,7 @@ class Draft:
             player.matchup_listeners_score += weekly_total
 
     def score_total(self):
-        for player in self.get_all_players():
+        for player in self.draft_players:
             player.total_score = player.total_listeners_score + \
                 player.total_aoty_score + player.total_billboard_score + player.total_change_score
             player.weeks_score = player.weeks_listener_score + \
@@ -487,4 +487,7 @@ class Draft:
                 return p2
             if p2 == player:
                 return p1
+        return None
+
+    def swap_artists(self, player_1, player_2):
         return None

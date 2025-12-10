@@ -23,9 +23,15 @@ class Client(commands.Bot):
     async def on_message(self, message):
         if message.author == self.user:
             return
+        message.author.id
+        if message.content.startswith("ACCEPT"):
+            if isinstance(message.channel, discord.DMChannel):
+                user = self.fetch_user(message.author.id)
+                message
+                await message.channel.send(f"Hi There {message.author}")
 
-        # if message.content.startswith("hello"):
-        # await message.channel.send(f"Hi There {message.author}")
+        if message.content.startswith("DECLINE"):
+            await message.channel.send(f"Hi There {message.author}")
 
 
 def start_client(guild_id: any = None, owner=None):
