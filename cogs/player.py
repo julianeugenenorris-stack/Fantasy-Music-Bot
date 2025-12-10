@@ -75,6 +75,7 @@ class Player:
         for artist in self.artists:
             info = self.artist_info.get(artist)
             info["matchup_listeners_score"] = 0
+            info["matchup_listeners"] = 0
             info["matchup_album_score"] = 0
             info["matchup_change_score"] = 0
             info["matchup_total_score"] = 0
@@ -92,7 +93,7 @@ class Player:
             # listeners information
             "starting_listeners": None,
             "weekly": [],
-            "matchup": [],
+            "matchup_listeners": 0,
             "yearly_listeners_total": 0,
 
             # listeners score

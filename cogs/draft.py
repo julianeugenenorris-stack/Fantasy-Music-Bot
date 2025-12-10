@@ -67,8 +67,10 @@ class Draft:
         self.week_matchups: list = []
         """This weeks matchups"""
         self.matchup_count: int = 0
-        """What week in the schedual it is on from 0-12"""
+        """What week on schedual it is """
 
+        self.total_matchups: int = 0
+        """What week on schedual it is """
         self.week_in_matchup: int = 0
         """What week in the matchup it is from 0-4"""
         self.week_in_season: int = 0
@@ -135,34 +137,93 @@ class Draft:
             for player in self.get_all_players():
                 player.reset_matchup()
 
-    def next_matchup(self):
-        players_versus: list = []
-        for index, player in enumerate(self.week_matchups[0]):
-            players_versus.append([player, self.week_matchups[1][index]])
-        for players in players_versus:
-            player_1: Player = players[0]
-            player_2: Player = players[1]
-            if player_1.matchup_score > player_2.matchup_score:
-                player_1.record_add_win()
-                player_2.record_add_loss()
-            elif player_1.matchup_score < player_2.matchup_score:
-                player_2.record_add_win()
-                player_1.record_add_loss()
-            else:
-                return
-        self.matchup_count += 1
-        self.week_matchups = self.matchups[self.matchup_count:self.matchup_count+1]
+    def generate_matchups(self) -> list:
+        """
+        Generates a full season of randomized matchups using the Circle Method.
+        Returns: A list of lists where each inner list is a list of (p1, p2) pairs for that week.
+        """
+        players = self.draft_players[:]
+        random.shuffle(players)
+
+        # If odd number of players, add an explicit "BYE" placeholder
+        if len(players) % 2 == 1:
+            players.append("BYE")
+
+        num_players = len(players)
+        num_weeks = num_players - 1
+        schedule = []
+
+        for _ in range(num_weeks):
+            week_pairs = []
+            half = num_players // 2
+            left = players[:half]
+            right = players[half:][::-1]  # Reverse second half
+
+            for p1, p2 in zip(left, right):
+                # keep pairs even if BYE is present so structure is consistent
+                week_pairs.append((p1, p2))
+
+            schedule.append(week_pairs)
+
+            # rotate (circle method) keeping players[0] fixed
+            players = [players[0]] + [players[-1]] + players[1:-1]
+
+        return schedule
 
     def start_matchups(self):
-        players: list = self.draft_players[:]
-        random.shuffle(players)  # suffle
-        sched = create_schedule(players)
-        full_sched = []
-        for week in range(0, 24):
-            full_sched.append(sched[week % len(sched)])
-            full_sched.append(sched[week])
-        self.matchups = full_sched[:]
-        self.week_matchups = full_sched[0:1]
+        base_matchups = self.generate_matchups()
+        # Keep previous behavior (if you want double round-robin)
+        self.matchups = base_matchups + base_matchups
+
+        # Initialize counters so matchup_count matches the index of week_matchups
+        self.matchup_count = 0
+        if self.matchups:
+            self.week_matchups = self.matchups[0]
+            self.total_matchups = 1
+
+    def next_matchup(self):
+        """Evaluate the just-finished matchup-week then advance to next week (wraps)."""
+        # Evaluate results for the current active week if present
+        for p1, p2 in list(self.week_matchups):
+            # skip BYE placeholders
+            if p1 == "BYE" and isinstance(p2, Player):
+                p2.record_add_win()
+                continue
+            if p2 == "BYE" and isinstance(p1, Player):
+                p1.record_add_win()
+                continue
+
+            # If any side is not a Player instance, skip evaluation
+            if not (isinstance(p1, Player) and isinstance(p2, Player)):
+                continue
+
+            # compare matchup_score and apply results
+            if p1.matchup_score > p2.matchup_score:
+                p1.record_add_win()
+                p2.record_add_loss()
+            elif p1.matchup_score < p2.matchup_score:
+                p2.record_add_win()
+                p1.record_add_loss()
+            else:
+                for player in self.draft_players:
+                    if player == p1:
+                        p2.record_add_win()
+                        p1.record_add_loss()
+                        continue
+                    if player == p2:
+                        p1.record_add_win()
+                        p2.record_add_loss()
+                        continue
+                pass
+
+        # Advance index to next week and wrap
+        if not self.matchups:
+            self.week_matchups = []
+            return
+
+        self.matchup_count = (self.matchup_count + 1) % len(self.matchups)
+        self.week_matchups = self.matchups[self.matchup_count]
+        self.total_matchups += 1
 
     def is_stage(self, stage: int | list) -> bool:
         """0 = draft is unstarted, 1 = draft is started, 2 = draft is completed, 3 = season is started, 4 = season is over
@@ -255,10 +316,11 @@ class Draft:
 
                 # log weekly listeners
                 player.artist_info[artist]["weekly"].append(listeners)
-                player.artist_info[artist]["matchup"].append(listeners)
+                player.artist_info[artist]["matchup_listeners"] += listeners
                 weekly_total += listeners
 
             player.weekly_listeners = weekly_total
+            player.matchup_listeners += weekly_total
             player.total_listeners += weekly_total
 
     def update_total_listeners(self):
@@ -419,29 +481,10 @@ class Draft:
         print("End season")
         return
 
-
-def create_schedule(list: list):
-    """ Create a schedule for the teams in the list and return it"""
-    s = []
-
-    if len(list) % 2 == 1:
-        list = list + ["BYE"]
-
-    for i in range(len(list)-1):
-
-        mid = int(len(list) / 2)
-        l1 = list[:mid]
-        l2 = list[mid:]
-        l2.reverse()
-
-        # Switch sides after each round
-        if (i % 2 == 1):
-            s = s + [l1, l2]
-        else:
-            s = s + [l2, l1]
-
-        list.insert(1, list.pop())
-
-    print(s[:])
-
-    return s
+    def get_opponent(self, player, week):
+        for p1, p2 in self.matchups[week]:
+            if p1 == player:
+                return p2
+            if p2 == player:
+                return p1
+        return None

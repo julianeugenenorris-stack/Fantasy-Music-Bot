@@ -11,7 +11,6 @@ import random
 import discord
 from discord.ext import commands
 
-
 load_dotenv()
 config = dotenv_values()
 GUILD_ID = discord.Object(id=config.get("GUILD_ID"))
@@ -484,7 +483,7 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
             await interaction.response.send_message("Can't look at weeks in the future.", delete_after=10, ephemeral=True)
             return
     else:
-        listeners_template(player, draft, type)
+        embed = listeners_template(player, draft, time)
 
     if show is False:
         await interaction.response.send_message(embed, ephemeral=True)
@@ -581,6 +580,61 @@ async def show_overview(ctx, error):
         raise error
 
 
+@client.tree.command(name="schedule", description="Shows matchup of all players in league and their scoring totals.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
+async def show_matchup(interaction: discord.Interaction, time: Literal["week", " season"], show: bool | None):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1, 2]):
+        await interaction.response.send_message("Need to finish draft before checking scores", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+    await interaction.response.defer()
+
+    if show == None:
+        show = False
+
+    if time == "week":
+        embed = build_schedule_template(draft)
+        await interaction.followup.send(embed=embed, ephemeral=show)
+        return
+    elif time == "season":
+        pairs = draft.week_matchups
+        if not pairs:
+            await interaction.followup.send("No matchups scheduled for this week.", ephemeral=True)
+            return
+
+        embeds = []
+        for p1, p2 in pairs:
+            # choose a non-BYE player to build the embed (embed builder handles BYE too)
+            player_to_pass = p1 if p1 != "BYE" else p2
+            embed = build_player_matchup(p1, p2, type)
+            if embed:
+                embeds.append(embed)
+
+        if not embeds:
+            await interaction.followup.send("No valid matchups to show.", ephemeral=True)
+            return
+
+        view = TemplateView(embeds)
+        if show is False:
+            await interaction.followup.send(embeds=embeds, view=view, ephemeral=True)
+        else:
+            await interaction.followup.send(embeds=embeds, view=view)
+        return
+
+
+@show_team.error
+async def show_matchup(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
 @client.tree.command(name="matchup", description="Shows matchup of all players in league and their scoring totals.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def show_matchup(interaction: discord.Interaction, people: Literal["mine", " all"], type: Literal["billboard", "change", "aoty", "listeners", "all"], show: bool | None):
@@ -602,28 +656,33 @@ async def show_matchup(interaction: discord.Interaction, people: Literal["mine",
             break
 
     if people == "mine":
-        embed = build_player_matchup(draft, player, type)
+        player = None
+        for p in draft.get_all_players():
+            if p.user_id == user.id:
+                player = p
+                break
+        embed = build_player_matchup(
+            player, draft.get_opponent(player, draft.matchup_count), type)
         if show is False:
-            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
         else:
-            await interaction.followup.send(embed=embed, view=view)
+            await interaction.followup.send(embed=embed)
             return
     elif people == "all":
-        if "BYE" in draft.matchups[draft.matchup_count][0]:
-            embeds = matchup_template(
-                draft, draft.matchups[draft.matchup_count][1], type)
-        else:
-            embeds = matchup_template(
-                draft, draft.matchups[draft.matchup_count][0], type)
-        view = TemplateView(embeds)
+        embeds = []
+        for p1, p2 in draft.week_matchups:
+            embed = build_player_matchup(p1, p2, type)
+            embeds.append(embed)
 
+        view = TemplateView(embeds)
+        print("embed finished")
         if show is False:
             await interaction.followup.send(embeds=embeds, view=view, ephemeral=True)
-            return
         else:
             await interaction.followup.send(embeds=embeds, view=view)
-            return
+        print("embed printed")
+        return
 
 
 @show_team.error
@@ -720,6 +779,100 @@ async def draftArtist(interaction: discord.Interaction, artist: str):
             artist]["albums_on_record"]
         player_info.remove(player_info[0])
     await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
+
+
+@client.tree.command(name="testjoin", description="Join fantasy draft as a player.", guild=GUILD_ID)
+@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
+async def join(interaction: discord.Interaction, team_name: str, user_id: str):
+    global draft
+
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to join.")
+        return
+
+    if draft.is_stage(stage=[1, 2, 3]):
+        await interaction.response.send_message("Draft already started", delete_after=10, ephemeral=True)
+        return
+
+    user = await client.fetch_user(int(user_id))
+
+    if draft is not None:
+        for p in draft.get_all_players():
+            if p.user_id == user.id:
+                await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
+                return
+
+    draft.add_new_player(user, user.id, user.name, team_name)
+
+    player = None
+    for p in draft.get_all_players():
+        if p.user_id == user.id:
+            player = p
+            break
+
+    draft_name = f"draft{draft.draft_name}"
+    save_object(draft, draft_name)
+
+    await interaction.response.send_message(f"{user.name} as joined the draft with team **{player.team_name}**.")
+
+
+@client.tree.command(name="testdraft", description="Draft artists to fantasy team.", guild=GUILD_ID)
+@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
+async def draft_artist(interaction: discord.Interaction, artist_name: str, user_id: str):
+    artist_selected = artist_name
+    try:
+        if draft.is_stage(0):
+            await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
+            return
+        elif draft.is_stage([2, 3, 4]):
+            await interaction.response.send_message("Draft is already finished", delete_after=10, ephemeral=True)
+            return
+    except:
+        await interaction.response.send_message("Need to create or import a draft room.", delete_after=10, ephemeral=True)
+        return
+
+    user = await client.fetch_user(int(user_id))
+
+    if draft.is_stage(stage=[2, 3]):
+        await interaction.response.send_message(
+            "Draft is already over.", delete_after=10, ephemeral=True)
+        return
+
+    if draft.get_all_players()[draft.turn].user_id == user.id:
+        for artist in draft.all_artists:
+            if artist_selected == artist:
+                player = draft.get_all_players()[draft.turn]
+
+                if artist_selected in draft.drafted_artists:
+                    await interaction.response.send_message(f"{artist_selected} has already been drafted. Draft another artist.", delete_after=10, ephemeral=True)
+                    return
+
+                await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
+                player.draft_artist(artist_selected)
+                draft.drafted_artists.add(artist_selected)
+
+                draft.next_turn()
+
+                if draft.is_stage(1):
+                    nextPlayer = draft.get_all_players()[draft.turn]
+                    user = await client.fetch_user(nextPlayer.user_id)
+
+                    draft_name = f"draft{draft.draft_name}"
+                    save_object(draft, draft_name)
+
+                    await interaction.followup.send(f"{user.mention} You are on the board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
+                    return
+                else:
+                    draft_name = f"draft{draft.draft_name}"
+                    save_object(draft, draft_name)
+
+                    await interaction.followup.send("Draft Completed.")
+                    return
+        await interaction.response.send_message(f"The artist {artist_selected} is not in the draft pool.", delete_after=10, ephemeral=True)
+        return
+    else:
+        await interaction.response.send_message("It is not your turn.", delete_after=10, ephemeral=True)
+        return
 
 
 client.run(DISCORD_TOKEN)

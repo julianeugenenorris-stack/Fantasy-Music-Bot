@@ -173,28 +173,52 @@ def overview_template(draft: Draft, type, time):
     return embeds
 
 
-def matchup_template(draft: Draft, type):
+def schedule_template(draft: Draft, players, type: str):
     embeds = []
 
-    for player in draft.matchups[draft.matchup_count]:
-        build_player_matchup(draft, player, type)
+    for p1, p2 in list(draft.week_matchups):
+        embed = build_player_matchup(p1, p2, type)
+        if embed:
+            embeds.append(embed)
 
     return embeds
 
 
-def build_player_matchup(draft: Draft, player: Player | str, type: str):
-    index_player = draft.matchups[draft.matchup_count].index(player)
-    players = [draft.matchups[draft.matchup_count][index_player],
-               draft.matchups[draft.matchup_count + 1][index_player]]
-    if "BYE" in index_player:
-        embed = discord.Embed(
-            title=f"{index_player[0].team_name}** is on bye.",
-            color=discord.Color.dark_grey(),
-        )
-        return embed
-
+def build_schedule_template(draft: Draft):
     embed = discord.Embed(
-        title=f"Matchup **{players[0].team_name}** vs **{players[1].team_name}**",
+        title=f"All Matchups This Week.",
+        color=discord.Color.dark_grey(),
+    )
+
+    embed.set_footer(text=f"Matchups for week {draft.week_in_season}")
+
+    for p1, p2 in list(draft.week_matchups):
+        embed.add_field(
+            name=f"{p1.team_name}",
+            value=f"{p1.name}: {p1.record[0]}-{p1.record[1]}",
+            inline=True
+        )
+        embed.add_field(
+            name=f"{p2.team_name}",
+            value=f"{p2.name}: {p2.record[0]}-{p2.record[1]}",
+            inline=True
+        )
+        embed.add_field(
+            name=f"",
+            value=f"",
+            inline=False
+        )
+
+    return embed
+
+
+def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
+    if isinstance(p1, str) or isinstance(p2, str):
+        return discord.Embed(title="This player or thier opponent is on a BYE week.", color=discord.Color.dark_grey())
+
+    players = [p1, p2]
+    embed = discord.Embed(
+        title=f"Matchup: **{p1.team_name}** vs **{p2.team_name}**",
         color=discord.Color.dark_grey(),
     )
     if type == "all":
@@ -205,27 +229,45 @@ def build_player_matchup(draft: Draft, player: Player | str, type: str):
                 inline=True
             )
 
+        embed.add_field(
+            name=f"",
+            value=f"",
+            inline=False
+        )
+
         for player in players:
             embed.add_field(
                 name=f"Matchup Album Score:",
                 value=f"{player.matchup_aoty_score:.2f}",
                 inline=True
             )
-
+        embed.add_field(
+            name=f"",
+            value=f"",
+            inline=False
+        )
         for player in players:
             embed.add_field(
                 name=f"Matchup Listeners Score:",
                 value=f"{player.matchup_listeners_score:.2f}",
                 inline=True
             )
-
+        embed.add_field(
+            name=f"",
+            value=f"",
+            inline=False
+        )
         for player in players:
             embed.add_field(
                 name=f"Matchup Change Score:",
                 value=f"{player.matchup_change_score:.2f}",
                 inline=True
             )
-
+        embed.add_field(
+            name=f"",
+            value=f"",
+            inline=False
+        )
         for player in players:
             embed.add_field(
                 name=f"Matchup Score Combined:",
@@ -233,23 +275,26 @@ def build_player_matchup(draft: Draft, player: Player | str, type: str):
                 inline=True
             )
     if type == "billboard":
+        for index, p1_artist in enumerate(p1.artist_info):
+            p2_artist = p2.artist_info[index]
+            p1_matchup_scores = p1_artist.get("total_billboard_score")
+            p2_matchup_scores = p2_artist.get("total_billboard_score")
 
-        for player in players:
-            for artist in player.artists:
-                total_scores = player.artist_info.get("total_billboard_score")
-
-                if total_scores != 0:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Matchup Billboard Score: {total_scores:,.2f}",
-                        inline=True
-                    )
-                else:
-                    embed.add_field(
-                        name=f"{artist}:",
-                        value=f"Has no billboard songs.",
-                        inline=True
-                    )
+            embed.add_field(
+                name=f"{p1_artist}:",
+                value=f"Matchup Billboard Score: {p1_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"{p2_artist}:",
+                value=f"Matchup Billboard Score: {p2_matchup_scores:,.2f}",
+                inline=True
+            )
+            embed.add_field(
+                name=f"",
+                value=f"",
+                inline=False
+            )
 
         for player in players:
             embed.add_field(
@@ -383,9 +428,9 @@ def new_league_albums_template(draft: Draft):
     return embed
 
 
-def listeners_template(player: Player, draft: Draft, type: str):
+def listeners_template(player: Player, draft: Draft, time: str):
     embed = discord.Embed(
-        title=f"Team **{player.team_name}**'s Listeners This {type.capitalize}" if type != "total" else f"Team **{player.team_name}**'s {type.capitalize} Listeners ",
+        title=f"Team **{player.team_name}**'s Listeners This {time.capitalize}" if type != "total" else f"Team **{player.team_name}**'s {time.capitalize} Listeners ",
         color=discord.Color.blue(),
     )
 
@@ -393,7 +438,7 @@ def listeners_template(player: Player, draft: Draft, type: str):
 
     artist_info = player.artist_info
 
-    if type == "week":
+    if time == "week":
         embed.set_footer(
             text=f"# is listeners counted this in week {draft.week_in_season}.")
 
@@ -415,22 +460,17 @@ def listeners_template(player: Player, draft: Draft, type: str):
         )
 
         return embed
-    elif type == "matchup":
+    elif time == "matchup":
         embed.set_footer(
             text=f"# is listeners counted this in matchup {draft.matchup_count+1}.")
 
         for count, (artist_name, data) in enumerate(artist_info.items(), start=1):
 
-            # safely get weekly score
-            matchup = data.get("matchup")
-
-            listeners = 0
-            for week in matchup:
-                listeners += week
+            matchup = data.get("matchup_listeners")
 
             embed.add_field(
                 name=f"{count}: {artist_name}",
-                value=f"{listeners:, }",
+                value=f"{matchup:, }",
                 inline=False
             )
 
@@ -441,7 +481,7 @@ def listeners_template(player: Player, draft: Draft, type: str):
         )
 
         return embed
-    elif type == "total":
+    elif time == "total":
         embed.set_footer(text="# is listeners.")
 
         artist_info = player.artist_info

@@ -28,31 +28,34 @@ def create_schedule(list: list):
     return s
 
 
-players: list = ["Player 1", "Player 2"]
-random.shuffle(players)  # suffle
-count = 0
-sched = create_schedule(players)
-full_sched = []
-for week in range(0, 24):
+def create_schedule(teams: list):
+    """Creates a round-robin schedule with proper matchups."""
+    n = len(teams)
+    if n % 2 == 1:
+        teams = teams + ["BYE"]
 
-    try:
-        full_sched += sched[week]
-        print(sched[week])
-        count += 0.5
-    except:
-        sched += sched
-        full_sched += sched[week]
-        print(sched[week])
-        count += 0.5
+    teams = teams[:]  # prevent mutating original list
+    n = len(teams)
 
-print(full_sched)
+    schedule = []
 
-players: list = ["Player 1", "Player 2"]
-random.shuffle(players)  # suffle
-sched = create_schedule(players)
-full_sched = []
-for week in range(0, 24):
-    full_sched.append(sched[week % len(sched)])
+    for _ in range(n - 1):
+        mid = n // 2
+
+        left = teams[:mid]
+        right = teams[mid:]
+        right = right[::-1]
+
+        week = []
+        for a, b in zip(left, right):
+            week.append((a, b))  # proper matchup tuple
+
+        schedule.append(week)
+
+        # rotate
+        teams = [teams[0]] + teams[-1:] + teams[1:-1]
+
+    return schedule
 
 
 print(full_sched)

@@ -25,7 +25,7 @@ class Client(commands.Bot):
             return
 
         # if message.content.startswith("hello"):
-        #    await message.channel.send(f"Hi There {message.author}")
+        # await message.channel.send(f"Hi There {message.author}")
 
 
 def start_client(guild_id: any = None, owner=None):

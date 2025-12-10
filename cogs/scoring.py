@@ -50,9 +50,9 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
 
         if sleep < 0:
             print(
-                f"Warning: Next run ({next_run}) is in the past. Correcting...")
-            next_run += timedelta(weeks=1)
-            sleep = (next_run - now).total_seconds()
+                f"Warning: Next run ({run_next_time}) is in the past. Correcting...")
+            run_next_time = run_next_time + timedelta(weeks=1)
+            sleep = (run_next_time - now).total_seconds()
 
         await interaction.followup.send(f"Weekly update scheduled at {run_next_time}. Update is in {((sleep / 3600) / 24):.1f} days." if (sleep / 3600) > 24 else f"Weekly update scheduled at {run_next_time}. Update is in {(sleep / 3600):.2f} hours.")
         print(
