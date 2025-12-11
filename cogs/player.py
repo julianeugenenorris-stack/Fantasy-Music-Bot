@@ -25,8 +25,9 @@ class Player:
 
         # variables for trades
         self.trades_sent: int = 0
-        self.trade_pieces: list = []
         """number of trades sent, can only have 1 sent at a time"""
+        self.trade_pieces: list = []
+        self.artsist_adds_left: int = 3
 
         # listeners for embeds
         self.total_listeners = 0
@@ -97,6 +98,60 @@ class Player:
 
             # listeners information
             "starting_listeners": None,
+            "weekly": [],
+            "matchup_listeners": 0,
+            "yearly_listeners_total": 0,
+
+            # listeners score
+            "weekly_listeners_score": 0,
+            "matchup_listeners_score": 0,
+            "total_listeners_score": 0,
+
+            # album score information
+            "new_album_score": 0,
+            "new_album_name": "",
+
+            # album score
+            "week_album_score": 0,
+            "matchup_album_score": 0,
+            "total_album_score": 0,
+
+            # billboard score information
+            "songs_on_billboard": [],
+
+            # billboard scores
+            "week_billboard_score": 0,
+            "matchup_billboard_score": 0,
+            "total_billboard_score": 0,
+
+            # change scores information
+            "week_listeners_change": 0,
+
+            # change scores
+            "week_score_change": 0,
+            "matchup_change_score": 0,
+            "total_score_change": 0,
+
+            # year long artist scores
+            "week_total_score": 0,
+            "matchup_total_score": 0,
+            "year_total_score": 0
+        }
+
+    def add_artist(self, add_name: str, remove_name: str, current_listeners: int):
+        self.artsist_adds_left -= 1
+        self.artists.append(add_name)
+        self.artists.remove(remove_name)
+        id = get_artist_id(add_name.lower())
+        self.artist_info.pop(remove_name)
+        self.artist_info[add_name] = {
+            # general artist info
+            "albums_on_record": get_all_artist_albums(id),
+            "id_aoty": id,
+            "picked": False,
+
+            # listeners information
+            "starting_listeners": current_listeners,
             "weekly": [],
             "matchup_listeners": 0,
             "yearly_listeners_total": 0,

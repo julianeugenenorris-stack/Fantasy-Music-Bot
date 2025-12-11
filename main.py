@@ -5,11 +5,11 @@ from cogs.scraper import *
 from cogs.embedtemplates import *
 from cogs.scoring import *
 from cogs.draft import Draft
-from cogs.client import start_client
 
 import random
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
+from discord import app_commands
 
 load_dotenv()
 config = dotenv_values()
@@ -19,6 +19,72 @@ OWNER_ID = config.get("OWNER_ID")
 
 client = start_client(GUILD_ID, OWNER_ID)
 draft: Draft = None
+
+GUILD_ID = None
+
+
+class Client(commands.Bot):
+    async def on_ready(self):
+        print(f"Logged on as {self.user}!")
+
+        if GUILD_ID is None:
+            print(f"Syncing without guild, no ID")
+            await self.tree.sync()
+
+        try:
+            synced = await self.tree.sync(guild=GUILD_ID)
+            print(f"Synced {len(synced)} command to guild {GUILD_ID.id}")
+
+        except Exception as e:
+            print(f'Error syncing command {e}')
+
+    async def on_message(self, message):
+        if message.author == self.user:
+            return
+        user_id = message.author.id
+        if message.content.startswith("ACCEPT"):
+            if not isinstance(message.channel, discord.DMChannel):
+                return
+
+            # get player it is responding too
+            response: str = message.content
+            split_response = response.split(" ")
+
+            # check if they put a player
+            if split_response[1] is None:
+                await message.channel.send(f"Put a players name after accept to accept their trade.")
+                return
+
+            trade_sender = split_response[1]
+            await message.channel.send(response)
+            user = await self.fetch_user(message.author.id)
+            message
+            await message.channel.send(f"Hi There {message.author}")
+
+        if message.content.startswith("DECLINE"):
+            await message.channel.send(f"Hi There {message.author}")
+
+
+def start_client(guild_id: any = None, owner=None):
+    global GUILD_ID
+
+    GUILD_ID = guild_id
+
+    intents = discord.Intents.default()
+    intents.message_content = True
+    intents.guilds = True
+    intents.messages = True
+
+    botDescription: str = "This bot runs a server wide draft. There can only be a single active draft per league. For help, type \"/help\"."
+
+    client: Client = Client(
+        command_prefix="!",
+        intents=intents,
+        owner_id=owner,
+        description=str(botDescription),
+    )
+
+    return client
 
 
 draft_command_cooldown: int = 1
@@ -209,6 +275,9 @@ async def start_season(interaction: discord.Interaction, day: int, hour: int, mi
 @client.tree.command(name="draft", description="Draft artists to fantasy team.", guild=GUILD_ID)
 @commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
 async def draft_artist(interaction: discord.Interaction, artist_name: str):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
     artist_selected = artist_name
     try:
         if draft.is_stage(0):
@@ -735,14 +804,63 @@ async def trade(interaction: discord.Interaction, player_user_name: str, my_arti
 
     embed = build_trade_template(player, their_artist_1,
                                  their_artist_2, their_artist_3, my_artist_1, my_artist_2, my_artist_3)
-    player.trade_pieces = [their_artist_1,
-                           their_artist_2, their_artist_3, my_artist_1, my_artist_2, my_artist_3]
+    player.trade_pieces = [my_artist_1, my_artist_2, my_artist_3, their_artist_1,
+                           their_artist_2, their_artist_3, trade_partner_user.id]
     trade_partner_user.send(embed=embed)
-    player.trades_sent += 1
+    player.trades_sent = 1
 
 
 @show_team.error
 async def trade(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
+@client.tree.command(name="add", description="Add an artist to team. They will have no scoring from before they were added", guild=GUILD_ID)
+async def add_artist(interaction: discord.Interaction, drop_artist: str, add_artist: str):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1, 2]):
+        await interaction.response.send_message("Need to start draft before adding artists", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+    player: Player | None = None
+    for p in draft.draft_players:
+        if p.user_id == user.id:
+            player = p
+            break
+
+    if player is None:
+        await interaction.response.send_message("You are not in the draft.", delete_after=10, ephemeral=True)
+        return
+    if drop_artist not in player.artists:
+        await interaction.response.send_message(f"Artist {drop_artist} is not in Team {player.team_name}.", delete_after=10, ephemeral=True)
+        return
+    if add_artist in player.artists:
+        await interaction.response.send_message(f"Artist {add_artist} is on the Team {player.team_name}.", delete_after=10, ephemeral=True)
+        return
+    if add_artist not in draft.all_artists:
+        await interaction.response.send_message(f"Artist {add_artist} is not in the artist pool.", delete_after=10, ephemeral=True)
+        return
+    if player.artsist_adds_left == 0:
+        await interaction.response.send_message(f"You have already added and dropped 3 players.", delete_after=10, ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Team {player.team_name} has dropped **{drop_artist}** and added **{add_artist}**.", delete_after=10, ephemeral=True)
+    draft.drafted_artists.remove(drop_artist)
+    draft.drafted_artists.add(add_artist)
+    player.add_artist(add_artist, drop_artist, draft.current_listeners[draft.all_artists.index(
+        add_artist)])
+
+
+@show_team.error
+async def add_artist(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -917,3 +1035,11 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str, user_
 
 
 client.run(DISCORD_TOKEN)
+
+
+def accept_trade(message, user, accepting_user):
+    global draft
+
+
+def decline_trade(message, user, accepting_user):
+    global draft

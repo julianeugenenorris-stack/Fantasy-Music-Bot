@@ -489,5 +489,6 @@ class Draft:
                 return p1
         return None
 
-    def swap_artists(self, player_1, player_2):
-        return None
+    def swap_artists(self, player_1: Player, player_2: Player, p1_artist: str, p2_artist: str):
+        player_1.artist_info[p2_artist] = player_2.artist_info.pop(p2_artist)
+        player_1.artist_info[p1_artist] = player_1.artist_info.pop(p1_artist)
