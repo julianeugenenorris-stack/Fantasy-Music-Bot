@@ -490,8 +490,14 @@ class Draft:
         return None
 
     def swap_artists(self, player_1: Player, player_2: Player, p1_artist: str, p2_artist: str):
-        player_1.artist_info[p2_artist] = player_2.artist_info.pop(p2_artist)
-        player_1.artist_info[p1_artist] = player_1.artist_info.pop(p1_artist)
+        player_1.artists.remove(p1_artist)
+        player_2.artists.remove(p1_artist)
+        player_1.artists.append(p1_artist)
+        player_2.artists.append(p1_artist)
+        info1 = player_1.artist_info.pop(p1_artist)
+        info2 = player_2.artist_info.pop(p1_artist)
+        player_1.artist_info[p1_artist] = info2
+        player_2.artist_info[p1_artist] = info1
 
     def accept_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
         user.send("Your trade was accepted!")
@@ -502,24 +508,34 @@ class Draft:
             self.swap_artists(trade_sender_player,
                               trade_reciever_player, pieces[1], pieces[4])
         except:
-            trade_sender_player.trade_pieces.clear
+            trade_sender_player.trade_pieces.clear()
             trade_sender_player.trades_sent = 0
+            trade_reciever_player.trades_sent = 0
             return
 
         try:
             self.swap_artists(trade_sender_player,
-                              trade_reciever_player, pieces[3], pieces[5])
+                              trade_reciever_player, pieces[2], pieces[5])
         except:
-            trade_sender_player.trade_pieces.clear
+            trade_sender_player.trade_pieces.clear()
             trade_sender_player.trades_sent = 0
+            trade_reciever_player.trades_sent = 0
             return
-        trade_sender_player.trade_pieces.clear
+        trade_sender_player.trade_pieces.clear()
         trade_sender_player.trades_sent = 0
+        trade_reciever_player.trades_sent = 0
         return
 
-    def decline_trade(self, trade_sender_player: Player, user):
-        trade_sender_player.trade_pieces.clear
+    def decline_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
+        trade_sender_player.trade_pieces.clear()
         trade_sender_player.trades_sent = 0
+        trade_reciever_player.trades_sent = 0
+        user.send("Your trade was declined")
+
+    def cancel_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
+        trade_sender_player.trade_pieces.clear()
+        trade_sender_player.trades_sent = 0
+        trade_reciever_player.trades_sent = 0
         user.send("Your trade was declined")
 
     def check_if_recieved_trade(self, chech_player: Player):
@@ -530,3 +546,49 @@ class Draft:
             except:
                 pass
         return False
+
+    def artists_exist_on_team(self, artists: list[str | None], team_artists: list[str]):
+        """Return first missing artist, or None if all good."""
+        for a in artists:
+            if a and a not in team_artists:
+                return a
+        return None
+
+    async def validate_trade(self,
+                             interaction,
+                             player: Player,
+                             partner: Player,
+                             my_artists: list[str | None],
+                             their_artists: list[str | None]
+                             ):
+
+        my_count = sum(1 for a in my_artists if a)
+        their_count = sum(1 for a in their_artists if a)
+
+        if my_count != their_count:
+            await interaction.response.send_message(
+                "Must trade the same number of artists.",
+                delete_after=10,
+                ephemeral=True
+            )
+            return False
+
+        missing = self.artists_exist_on_team(my_artists, player.artists)
+        if missing:
+            await interaction.response.send_message(
+                f"Artist {missing} is not in Team {player.team_name}.",
+                delete_after=10,
+                ephemeral=True
+            )
+            return False
+
+        missing = self.artists_exist_on_team(their_artists, partner.artists)
+        if missing:
+            await interaction.response.send_message(
+                f"Artist {missing} is not in Team {partner.team_name}.",
+                delete_after=10,
+                ephemeral=True
+            )
+            return False
+
+        return True

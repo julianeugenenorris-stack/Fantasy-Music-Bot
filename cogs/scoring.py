@@ -25,10 +25,10 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
         print("starting season")
         draft.next_stage()
 
-        await interaction.followup.send("Starting first weekly update. Don't send commands till it is finished...")
-        await update_draft(draft, interaction)
-        await update_score(draft, interaction)
-        await save_changes(draft, interaction)
+        msg = await interaction.followup.send("Starting first weekly update. Don't send commands till it is finished...")
+        await update_draft(draft, interaction, msg)
+        await update_score(draft, interaction, msg)
+        await save_changes(draft, interaction, msg)
         await interaction.followup.send("League update is completed! Starting season...")
 
         for p in draft.draft_players:
@@ -122,7 +122,7 @@ async def update_score(draft: Draft, interaction, msg):
         draft.score_total()
         await interaction.followup.edit_message(msg.id, content="Starting weekly league update. Please don't use any commands during the update...\nScoring Change In Listeners completed!.\nScoring Listeners completed!\nScoring Full Week completed!")
 
-        asyncio.sleep(4)
+        await asyncio.sleep(3)
         await interaction.followup.edit_message(msg.id, content="Starting weekly league update. Please don't use any commands during the update...\nWeekly league information loaded.\nWeekly scores updated!")
     except Exception as e:
         await interaction.followup.send(f"Error during weekly score update: {e}")

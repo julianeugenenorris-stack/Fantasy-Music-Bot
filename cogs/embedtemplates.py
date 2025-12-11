@@ -5,8 +5,6 @@ from cogs.draft import Draft
 from cogs.scraper import *
 from discord.ui import View, Button
 
-WEEK_MONTH_CONVER = 4.34524
-
 
 class TemplateView(View):
     def __init__(self, embeds):

@@ -8,8 +8,8 @@ from cogs.draft import Draft
 
 import random
 import discord
-from discord.ext import commands, tasks
-from discord import app_commands, Message
+from discord.ext import commands
+from discord import Message
 
 load_dotenv()
 config = dotenv_values()
@@ -42,7 +42,7 @@ class Client(commands.Bot):
         if not isinstance(message.channel, discord.DMChannel):
             return
 
-        if not message.content.startswith("ACCEPT") and not message.content.startswith("DECLINE"):
+        if not message.content.startswith("ACCEPT") and not message.content.startswith("DECLINE") and not message.content.startswith("CANCEL"):
             return
 
         if draft is None:
@@ -74,6 +74,11 @@ class Client(commands.Bot):
             return
 
         if accepting_player == sending_player:
+            if message.content.startswith("CANCEL"):
+                user = client.fetch_user(sending_player.user_id)
+                draft.accept_trade(sending_player, accepting_player, user)
+                draft.cancel_trade(sending_player, accepting_player, user)
+                return
             await message.channel.send(f"You can't accept your own trade dumbass. Actually fuck you for trying and making me have to put this here.")
             return
 
@@ -133,7 +138,7 @@ def start_client(guild_id: any = None, owner=None):
 client = start_client(GUILD_ID, OWNER_ID)
 
 
-draft_command_cooldown: int = 1
+draft_command_cooldown: int = 5
 team_command_cooldown: int = 60
 
 
@@ -246,7 +251,7 @@ async def settings(interaction: discord.Interaction,
 
 
 @settings.error
-async def mycommand_error(ctx, error):
+async def settings_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -288,7 +293,7 @@ async def join(interaction: discord.Interaction, team_name: str):
 
 
 @join.error
-async def mycommand_error(ctx, error):
+async def join_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -338,11 +343,6 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str):
 
     user = interaction.user
 
-    if draft.is_stage(stage=[2, 3]):
-        await interaction.response.send_message(
-            "Draft is already over.", delete_after=10, ephemeral=True)
-        return
-
     if draft.draft_players[draft.turn].user_id == user.id:
         for artist in draft.all_artists:
             if artist_selected == artist:
@@ -381,7 +381,7 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str):
 
 
 @draft_artist.error
-async def mycommand_error(ctx, error):
+async def draft_artist_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -454,7 +454,7 @@ async def show_team(interaction: discord.Interaction):
 
 
 @show_team.error
-async def show_teamte(ctx, error):
+async def show_team_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -481,8 +481,8 @@ async def show_billboard(interaction: discord.Interaction):
     await interaction.followup.send(embed=embeds[0], view=view)
 
 
-@draft_artist.error
-async def show_billboard(ctx, error):
+@show_billboard.error
+async def show_billboard_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -517,8 +517,8 @@ async def show_artist(interaction: discord.Interaction, artist_name: str, show: 
         await interaction.followup.send(embed=embed)
 
 
-@draft_artist.error
-async def mycommand_error(ctx, error):
+@show_artist.error
+async def show_artist_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -560,8 +560,8 @@ async def show_album(interaction: discord.Interaction, time: Literal["mine", "le
     await interaction.response.send_message(embed=embed)
 
 
-@show_team.error
-async def mycommand_error(ctx, error):
+@show_album.error
+async def show_album_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -607,8 +607,8 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
     await interaction.response.send_message(embed=embed)
 
 
-@show_team.error
-async def mycommand_error(ctx, error):
+@show_listeners.error
+async def show_listeners_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -655,8 +655,8 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
     await interaction.response.send_message(embed=embed)
 
 
-@show_team.error
-async def mycommand_error(ctx, error):
+@show_scores.error
+async def show_scores_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -682,8 +682,8 @@ async def show_overview(interaction: discord.Interaction, time: Literal["week", 
     await interaction.followup.send(embeds=embeds, view=view)
 
 
-@show_team.error
-async def show_overview(ctx, error):
+@show_overview.error
+async def show_overview_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -692,7 +692,7 @@ async def show_overview(ctx, error):
 
 @client.tree.command(name="schedule", description="Shows matchup of all players in league and their scoring totals.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_matchup(interaction: discord.Interaction, time: Literal["week", "season"]):
+async def show_schedule(interaction: discord.Interaction, time: Literal["week", "season"]):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -736,8 +736,8 @@ async def show_matchup(interaction: discord.Interaction, time: Literal["week", "
         return
 
 
-@show_team.error
-async def show_matchup(ctx, error):
+@show_schedule.error
+async def show_schedule_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -779,8 +779,8 @@ async def show_matchup(interaction: discord.Interaction, people: Literal["mine",
         return
 
 
-@show_team.error
-async def show_matchup(ctx, error):
+@show_matchup.error
+async def show_matchup_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
@@ -788,6 +788,7 @@ async def show_matchup(ctx, error):
 
 
 @client.tree.command(name="trade", description="Send a trade offer to player.", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def trade(interaction: discord.Interaction, player_user_name: str, my_artist_1: str, my_artist_2: str | None, my_artist_3: str | None, their_artist_1: str, their_artist_2: str | None, their_artist_3: str | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
@@ -817,33 +818,27 @@ async def trade(interaction: discord.Interaction, player_user_name: str, my_arti
     if player is None:
         await interaction.response.send_message("You are not in the draft.", delete_after=10, ephemeral=True)
         return
-    if my_artist_1 not in player.artists:
-        await interaction.response.send_message(f"Artist {my_artist_1} is not in Team {player.team_name}.", delete_after=10, ephemeral=True)
-        return
-    if their_artist_1 not in trade_partner.artists:
-        await interaction.response.send_message(f"Artist {their_artist_1} is not in Team {trade_partner.team_name}.", delete_after=10, ephemeral=True)
-        return
-    if (isinstance(my_artist_2, str) and their_artist_2 is None) or (my_artist_2 is None and isinstance(their_artist_2, str)):
-        await interaction.response.send_message(f"Must trade equal numbers of artists.", delete_after=10, ephemeral=True)
-        return
-    if my_artist_2 not in player.artists:
-        await interaction.response.send_message(f"Artist {my_artist_2} is not in Team {player.team_name}.", delete_after=10, ephemeral=True)
-        return
-    if their_artist_2 not in trade_partner.artists:
-        await interaction.response.send_message(f"Artist {their_artist_2} is not in Team {trade_partner.team_name}.", delete_after=10, ephemeral=True)
-        return
-    if (isinstance(my_artist_2, str) and their_artist_2 is None) or (my_artist_2 is None and isinstance(their_artist_2, str)):
-        await interaction.response.send_message(f"Must trade equal numbers of artists.", delete_after=10, ephemeral=True)
-        return
-    if my_artist_3 not in player.artists:
-        await interaction.response.send_message(f"Artist {my_artist_3} is not in Team {player.team_name}.", delete_after=10, ephemeral=True)
-        return
-    if their_artist_3 not in trade_partner.artists:
-        await interaction.response.send_message(f"Artist {their_artist_3} is not in Team {trade_partner.team_name}.", delete_after=10, ephemeral=True)
+
+    my_artists = [my_artist_1, my_artist_2, my_artist_3]
+    their_artists = [their_artist_1, their_artist_2, their_artist_3]
+
+    is_valid = await draft.validate_trade(
+        interaction,
+        player,
+        trade_partner,
+        my_artists,
+        their_artists
+    )
+
+    if not is_valid:
         return
 
-    if player.trades_sent == 0:
+    if player.trades_sent == 1:
         await interaction.response.send_message(f"You have already sent a trade, get the player to decline it before sending another.", delete_after=10, ephemeral=True)
+        return
+
+    if trade_partner.trades_sent == 1:
+        await interaction.response.send_message(f"Player already has a trade request, get the player to decline it before sending another.", delete_after=10, ephemeral=True)
         return
 
     trade_partner_user = await client.fetch_user(trade_partner.user_id)
@@ -852,19 +847,21 @@ async def trade(interaction: discord.Interaction, player_user_name: str, my_arti
                                  their_artist_2, their_artist_3, my_artist_1, my_artist_2, my_artist_3)
     player.trade_pieces = [my_artist_1, my_artist_2, my_artist_3, their_artist_1,
                            their_artist_2, their_artist_3, trade_partner_user.id]
-    trade_partner_user.send(embed=embed)
+    await trade_partner_user.send(embed=embed)
     player.trades_sent = 1
+    trade_partner.trades_sent = 1
 
 
-@show_team.error
-async def trade(ctx, error):
+@trade.error
+async def trade_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
         raise error
 
 
-@client.tree.command(name="add", description="Add an artist to team. They will have no scoring from before they were added", guild=GUILD_ID)
+@client.tree.command(name="add_artist", description="Add an artist to team. No scoring from before they were added", guild=GUILD_ID)
+@commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
 async def add_artist(interaction: discord.Interaction, drop_artist: str, add_artist: str):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
@@ -901,15 +898,15 @@ async def add_artist(interaction: discord.Interaction, drop_artist: str, add_art
         await interaction.response.send_message(f"You have already added and dropped 3 players.", delete_after=10, ephemeral=True)
         return
 
-    await interaction.response.send_message(f"Team {player.team_name} has dropped **{drop_artist}** and added **{add_artist}**.", delete_after=10, ephemeral=True)
+    await interaction.response.send_message(f"Team {player.team_name} has dropped **{drop_artist}** and added **{add_artist}**.")
     draft.drafted_artists.remove(drop_artist)
     draft.drafted_artists.add(add_artist)
     player.add_artist(add_artist, drop_artist, draft.current_listeners[draft.all_artists.index(
         add_artist)])
 
 
-@show_team.error
-async def add_artist(ctx, error):
+@add_artist.error
+async def add_artist_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
     else:
