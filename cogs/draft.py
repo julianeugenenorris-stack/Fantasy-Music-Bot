@@ -492,3 +492,41 @@ class Draft:
     def swap_artists(self, player_1: Player, player_2: Player, p1_artist: str, p2_artist: str):
         player_1.artist_info[p2_artist] = player_2.artist_info.pop(p2_artist)
         player_1.artist_info[p1_artist] = player_1.artist_info.pop(p1_artist)
+
+    def accept_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
+        user.send("Your trade was accepted!")
+        pieces = trade_sender_player.trade_pieces
+        self.swap_artists(trade_sender_player,
+                          trade_reciever_player, pieces[0], pieces[3])
+        try:
+            self.swap_artists(trade_sender_player,
+                              trade_reciever_player, pieces[1], pieces[4])
+        except:
+            trade_sender_player.trade_pieces.clear
+            trade_sender_player.trades_sent = 0
+            return
+
+        try:
+            self.swap_artists(trade_sender_player,
+                              trade_reciever_player, pieces[3], pieces[5])
+        except:
+            trade_sender_player.trade_pieces.clear
+            trade_sender_player.trades_sent = 0
+            return
+        trade_sender_player.trade_pieces.clear
+        trade_sender_player.trades_sent = 0
+        return
+
+    def decline_trade(self, trade_sender_player: Player, user):
+        trade_sender_player.trade_pieces.clear
+        trade_sender_player.trades_sent = 0
+        user.send("Your trade was declined")
+
+    def check_if_recieved_trade(self, chech_player: Player):
+        for player in self.draft_players:
+            try:
+                if chech_player.user_id == player.trade_pieces[6]:
+                    return True
+            except:
+                pass
+        return False

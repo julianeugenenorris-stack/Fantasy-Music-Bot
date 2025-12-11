@@ -9,7 +9,7 @@ from cogs.draft import Draft
 import random
 import discord
 from discord.ext import commands, tasks
-from discord import app_commands
+from discord import app_commands, Message
 
 load_dotenv()
 config = dotenv_values()
@@ -17,10 +17,7 @@ GUILD_ID = discord.Object(id=config.get("GUILD_ID"))
 DISCORD_TOKEN = config.get("DISCORD_TOKEN")
 OWNER_ID = config.get("OWNER_ID")
 
-client = start_client(GUILD_ID, OWNER_ID)
 draft: Draft = None
-
-GUILD_ID = None
 
 
 class Client(commands.Bot):
@@ -38,31 +35,77 @@ class Client(commands.Bot):
         except Exception as e:
             print(f'Error syncing command {e}')
 
-    async def on_message(self, message):
+    async def on_message(self, message: Message):
         if message.author == self.user:
             return
-        user_id = message.author.id
+
+        if not isinstance(message.channel, discord.DMChannel):
+            return
+
+        if not message.content.startswith("ACCEPT") and not message.content.startswith("DECLINE"):
+            return
+
+        if draft is None:
+            await message.channel.send(f"Draft is not loaded.")
+            return
+
+        accepting_player: Player | None = None
+        for p in draft.draft_players:
+            if p.user_id == message.author.id:
+                accepting_player = p
+                break
+
+        response: str = message.content
+        split_response = response.split(" ")
+
+        # check if they put a player
+        if len(split_response) == 1:
+            await message.channel.send(f"Put a players name after accept to accept their trade.")
+            return
+
+        sending_player: Player | None = None
+        for p in draft.draft_players:
+            if p.name == split_response[1]:
+                sending_player = p
+                break
+
+        if sending_player is None:
+            await message.channel.send(f"Player is not in draft.")
+            return
+
+        if accepting_player == sending_player:
+            await message.channel.send(f"You can't accept your own trade dumbass. Actually fuck you for trying and making me have to put this here.")
+            return
+
         if message.content.startswith("ACCEPT"):
-            if not isinstance(message.channel, discord.DMChannel):
+            try:
+                if sending_player.trade_pieces[6] == accepting_player.user_id:
+                    user = client.fetch_user(sending_player.user_id)
+                    draft.accept_trade(sending_player, accepting_player, user)
+                    await message.channel.send(f"Trade accepted from {sending_player}.")
+                    return
+                else:
+                    await message.channel.send(f"No trade from player exists.")
+                    return
+            except:
+                await message.channel.send(f"No trade from player exists.")
                 return
-
-            # get player it is responding too
-            response: str = message.content
-            split_response = response.split(" ")
-
-            # check if they put a player
-            if split_response[1] is None:
-                await message.channel.send(f"Put a players name after accept to accept their trade.")
-                return
-
-            trade_sender = split_response[1]
-            await message.channel.send(response)
-            user = await self.fetch_user(message.author.id)
-            message
-            await message.channel.send(f"Hi There {message.author}")
 
         if message.content.startswith("DECLINE"):
-            await message.channel.send(f"Hi There {message.author}")
+            try:
+                if sending_player.trade_pieces[6] == accepting_player.user_id:
+                    user = client.fetch_user(sending_player.user_id)
+                    draft.decline_trade(sending_player, accepting_player, user)
+                    await message.channel.send(f"Trade declined from {sending_player}.")
+                    return
+                else:
+                    await message.channel.send(f"No trade from player exists.")
+                    return
+            except:
+                await message.channel.send(f"No trade from player exists.")
+                return
+        await message.channel.send(f"Some shit went wrong lmk bby girly I am really tired while writting this.")
+        return
 
 
 def start_client(guild_id: any = None, owner=None):
@@ -85,6 +128,9 @@ def start_client(guild_id: any = None, owner=None):
     )
 
     return client
+
+
+client = start_client(GUILD_ID, OWNER_ID)
 
 
 draft_command_cooldown: int = 1
@@ -839,6 +885,9 @@ async def add_artist(interaction: discord.Interaction, drop_artist: str, add_art
     if player is None:
         await interaction.response.send_message("You are not in the draft.", delete_after=10, ephemeral=True)
         return
+    if draft.check_if_recieved_trade(player):
+        await interaction.response.send_message("Can't add player with pending trade, decline or accept it.", delete_after=10, ephemeral=True)
+        return
     if drop_artist not in player.artists:
         await interaction.response.send_message(f"Artist {drop_artist} is not in Team {player.team_name}.", delete_after=10, ephemeral=True)
         return
@@ -883,17 +932,17 @@ async def draftArtist(interaction: discord.Interaction, update: bool):
             await interaction.followup.send("No draft loaded, skipping update.")
             return
 
-        await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
+        msg = await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
         if update is True:
-            await update_draft(draft, interaction)
+            await update_draft(draft, interaction, msg)
             print(
                 f"Week: {draft.week_in_season}, Week in matchup: {draft.week_in_matchup}, Matchup: {draft.matchup_count}")
         else:
             draft.next_week()
             print(
                 f"Week: {draft.week_in_season}, Week in matchup: {draft.week_in_matchup}, Matchup: {draft.matchup_count}")
-        await update_score(draft, interaction)
-        await save_changes(draft, interaction)
+        await update_score(draft, interaction, msg)
+        await save_changes(draft, interaction, msg)
         await interaction.followup.send("League update is completed!")
 
     except Exception as e:
@@ -1035,11 +1084,3 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str, user_
 
 
 client.run(DISCORD_TOKEN)
-
-
-def accept_trade(message, user, accepting_user):
-    global draft
-
-
-def decline_trade(message, user, accepting_user):
-    global draft

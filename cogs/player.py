@@ -27,6 +27,7 @@ class Player:
         self.trades_sent: int = 0
         """number of trades sent, can only have 1 sent at a time"""
         self.trade_pieces: list = []
+        """[my_artist_1, my_artist_2, my_artist_3, their_artist_1, their_artist_2, their_artist_3, trade_partner_user.id]"""
         self.artsist_adds_left: int = 3
 
         # listeners for embeds

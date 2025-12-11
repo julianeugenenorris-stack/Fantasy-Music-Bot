@@ -161,6 +161,7 @@ def get_most_recent_album_user_score(artist_id):
         return None  # No user score found
 
 
+"""
 def download_pages():
     # delete old
     folder = "database"
@@ -183,7 +184,7 @@ def download_pages():
 
     # print new
     while True:
-        time.sleep(respect_clock)
+        await asyncio.sleep(respect_clock)
         try:
             page_url = f"{url}{page}.html" if page > 1 else f"{url}.html"
             print(f"Looking up : {page_url}")
@@ -206,6 +207,7 @@ def download_pages():
         page += 1
 
     return
+"""
 
 
 def parse_all_pages():
