@@ -1,15 +1,15 @@
 from datetime import datetime, timedelta
 import asyncio
-from discord import Message
-
+from discord import Message, Interaction
 from cogs.draft import Draft
 from cogs.scraper import *
+from embedtemplates import winner_template
 
 season_week_length: int = 52
 season_month_length: int = 4
 
 
-async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=None):
+async def weekly_update(draft: Draft, interaction: Interaction, day=None, hour=None, minute=None):
     if day is None or hour is None or minute is None:
         weekday, hour_timer, minute_timer = draft.get_update_time()
     else:
@@ -64,17 +64,19 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
         await update_draft(draft, interaction, msg)
         await update_score(draft, interaction, msg)
         await save_changes(draft, interaction, msg)
-        await interaction.followup.send("League update is completed!")
+        await interaction.followup.edit_message(msg.id, content="Finished weekly league update.\nWeekly league information loaded.\nWeekly scores updated.\nStarting next weeks timer, you can use commands again.")
 
-        if draft.matchup_count > 13:
+        if draft.total_matchups > 13:
             # Season is over
             await interaction.followup.send("Season has ended. Finalizing results.")
+            embed = winner_template(draft)
             draft.next_stage()
             draft.end_season()
+            await interaction.followup.send(embed=embed)
             break
 
 
-async def update_draft(draft: Draft, interaction, msg):
+async def update_draft(draft: Draft, interaction: Interaction, msg):
     try:
         if draft is None:
             await interaction.followup.send("No draft loaded, skipping update.")

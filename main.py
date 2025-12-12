@@ -9,7 +9,7 @@ from cogs.draft import Draft
 import random
 import discord
 from discord.ext import commands
-from discord import Message
+from discord import Message, User, Client
 
 load_dotenv()
 config = dotenv_values()
@@ -30,10 +30,6 @@ class Client(commands.Bot):
             return
 
         try:
-            await client.tree.sync()           # sync globally
-            # remove all global commands
-            client.tree.clear_commands(guild=None, type=None)
-            # add commands locally
             synced = await self.tree.sync(guild=GUILD_ID)
             print(f"Synced {len(synced)} command to guild {GUILD_ID.id}")
             return
@@ -62,6 +58,12 @@ class Client(commands.Bot):
                 accepting_player = p
                 break
 
+        if message.content.startswith("CANCEL"):
+            if await draft.cancel_trade(accepting_player, user, client):
+                draft_name = f"draft{draft.draft_name}"
+                save_object(draft, draft_name)
+            return
+
         response: str = message.content
         split_response = response.split(" ")
 
@@ -81,20 +83,17 @@ class Client(commands.Bot):
             return
 
         if accepting_player == sending_player:
-            if message.content.startswith("CANCEL"):
-                user = client.fetch_user(sending_player.user_id)
-                draft.accept_trade(sending_player, accepting_player, user)
-                draft.cancel_trade(sending_player, accepting_player, user)
-                return
-            await message.channel.send(f"You can't accept your own trade dumbass. Actually fuck you for trying and making me have to put this here.")
+            await message.channel.send(f"You can't accept your own trade.")
             return
 
         if message.content.startswith("ACCEPT"):
             if len(sending_player.trade_pieces) > 6:
                 if sending_player.trade_pieces[6] == accepting_player.user_id:
-                    user = client.fetch_user(sending_player.user_id)
-                    draft.accept_trade(sending_player, accepting_player, user)
-                    await message.channel.send(f"Trade accepted from {sending_player}.")
+                    user = await client.fetch_user(sending_player.user_id)
+                    await draft.accept_trade(sending_player, accepting_player, user)
+                    await message.channel.send(f"Trade accepted from {sending_player.name}.")
+                    draft_name = f"draft{draft.draft_name}"
+                    save_object(draft, draft_name)
                     return
                 else:
                     await message.channel.send(f"No trade from player exists.")
@@ -106,9 +105,11 @@ class Client(commands.Bot):
         if message.content.startswith("DECLINE"):
             if len(sending_player.trade_pieces) > 6:
                 if sending_player.trade_pieces[6] == accepting_player.user_id:
-                    user = client.fetch_user(sending_player.user_id)
-                    draft.decline_trade(sending_player, accepting_player, user)
-                    await message.channel.send(f"Trade declined from {sending_player}.")
+                    user = await client.fetch_user(sending_player.user_id)
+                    await draft.decline_trade(sending_player, accepting_player, user)
+                    await message.channel.send(f"Trade declined from {sending_player.name}.")
+                    draft_name = f"draft{draft.draft_name}"
+                    save_object(draft, draft_name)
                     return
                 else:
                     await message.channel.send(f"No trade from player exists.")
@@ -116,7 +117,7 @@ class Client(commands.Bot):
             else:
                 await message.channel.send(f"No trade from player exists.")
                 return
-        await message.channel.send(f"Some shit went wrong lmk bby girly I am really tired while writting this.")
+        await message.channel.send(f"Error: Something is wrong hit me up.")
         return
 
 
@@ -355,7 +356,7 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str):
                     await interaction.response.send_message(f"{artist_selected} has already been drafted. Draft another artist.", delete_after=10, ephemeral=True)
                     return
 
-                await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
+                await interaction.response.send_message(f"{user.name} has drafted **{artist_selected}**!")
                 player.draft_artist(artist_selected)
                 draft.drafted_artists.add(artist_selected)
 
@@ -851,8 +852,14 @@ async def trade(interaction: discord.Interaction, player_user_name: str, my_arti
     player.trade_pieces = [my_artist_1, my_artist_2, my_artist_3, their_artist_1,
                            their_artist_2, their_artist_3, trade_partner_user.id]
     await trade_partner_user.send(embed=embed)
+    embed = build_trade_recipt_template(trade_partner_user, their_artist_1,
+                                        their_artist_2, their_artist_3, my_artist_1, my_artist_2, my_artist_3)
+    await interaction.user.send(embed=embed)
     player.trades_sent = 1
     trade_partner.trades_sent = 1
+    draft_name = f"draft{draft.draft_name}"
+    save_object(draft, draft_name)
+    await interaction.response.send_message(f"Trade sent to {trade_partner_user.name}.", delete_after=10, ephemeral=True)
 
 
 @trade.error
@@ -885,7 +892,7 @@ async def add_artist(interaction: discord.Interaction, drop_artist: str, add_art
     if player is None:
         await interaction.response.send_message("You are not in the draft.", delete_after=10, ephemeral=True)
         return
-    if draft.check_if_recieved_trade(player):
+    if await draft.check_if_recieved_trade(player):
         await interaction.response.send_message("Can't add player with pending trade, decline or accept it.", delete_after=10, ephemeral=True)
         return
     if drop_artist not in player.artists:
@@ -906,6 +913,8 @@ async def add_artist(interaction: discord.Interaction, drop_artist: str, add_art
     draft.drafted_artists.add(add_artist)
     player.add_artist(add_artist, drop_artist, draft.current_listeners[draft.all_artists.index(
         add_artist)])
+    draft_name = f"draft{draft.draft_name}"
+    save_object(draft, draft_name)
 
 
 @add_artist.error
@@ -915,6 +924,49 @@ async def add_artist_error(ctx, error):
     else:
         raise error
 
+
+@client.tree.command(name="update_name", description="Bug fixing command. Will set everyones user name incase someone changes theirs.", guild=GUILD_ID)
+@commands.cooldown(1, 1000, commands.BucketType.user)
+async def add_artist(interaction: discord.Interaction, team_name: str | None):
+    if draft is None:
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
+        return
+
+    if draft.is_stage([0, 1]):
+        await interaction.response.send_message("Need to start draft before fixing names", delete_after=10, ephemeral=True)
+        return
+
+    if team_name is None:
+        for player in draft.draft_players:
+            user: User = await client.fetch_user(player.user_id)
+            player.name = user.name
+            time.sleep(.5)
+
+        await interaction.response.send_message("Player names updated", delete_after=10, ephemeral=True)
+        return
+
+    user = interaction.user
+
+    player: Player | None = None
+    for p in draft.draft_players:
+        if p.user_id == user.id:
+            player = p
+            break
+
+    old_name = player.team_name
+    player.team_name = team_name
+
+    await interaction.response.send_message(f"{player.name} has updated their team name from **{old_name}** to **{player.team_name}**")
+
+
+@add_artist.error
+async def update_names_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f"This command is on cooldown! Try again in {error.retry_after:.2f} seconds.")
+    else:
+        raise error
+
+
 """
 TESTING COMMANDS
 
@@ -923,163 +975,19 @@ TODO REMOVE THESE AFTER FINISHING
 """
 
 
-@client.tree.command(name="testupdate", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction, update: bool):
-
-    await interaction.response.send_message("Starting weekly artist score update...")
-    try:
-        if draft is None:
-            await interaction.followup.send("No draft loaded, skipping update.")
-            return
-
-        msg = await interaction.followup.send("Starting weekly league update. Please don't use any commands during the update...")
-        if update is True:
-            await update_draft(draft, interaction, msg)
-            print(
-                f"Week: {draft.week_in_season}, Week in matchup: {draft.week_in_matchup}, Matchup: {draft.matchup_count}")
-        else:
-            draft.next_week()
-            print(
-                f"Week: {draft.week_in_season}, Week in matchup: {draft.week_in_matchup}, Matchup: {draft.matchup_count}")
-        await update_score(draft, interaction, msg)
-        await save_changes(draft, interaction, msg)
-        await interaction.followup.send("League update is completed!")
-
-    except Exception as e:
-        await interaction.followup.send(f"Error during weekly update: {e}")
-
-
-@client.tree.command(name="stage", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draft_artist(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Draft is at stage {draft.stage}.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="testschedual", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draft_artist(interaction: discord.Interaction):
-    print(f"Current Matchup {draft.week_matchups}")
-    print(f"All Matchups {draft.matchups}")
-    print(f"Matchup Week {draft.matchup_count}")
-    print(f"Week in Matchup {draft.week_in_matchup}")
-    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="printplayerinfo", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction):
-    player_info = None
-    for player in draft.draft_players:
-        player_info = player.artist_info
-    print(str(player_info))
-    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="printdraftinfo", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction):
-    draft.start_matchups()
-    print(str(draft.matchups))
-    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="removelastalbum", description="Draft artists to fantasy team.", guild=GUILD_ID)
-async def draftArtist(interaction: discord.Interaction, artist: str):
-    player_info = None
-    for player in draft.draft_players:
-        player_info: list = player.artist_info[
-            artist]["albums_on_record"]
-        player_info.remove(player_info[0])
-    await interaction.response.send_message(f"Done.", delete_after=10, ephemeral=True)
-
-
-@client.tree.command(name="testjoin", description="Join fantasy draft as a player.", guild=GUILD_ID)
-@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
-async def join(interaction: discord.Interaction, team_name: str, user_id: str):
-    global draft
-
+@client.tree.command(name="testendseason", description="Bug fixing command. Will set everyones user name incase someone changes theirs.", guild=GUILD_ID)
+@commands.cooldown(1, 1000, commands.BucketType.user)
+async def add_artist(interaction: discord.Interaction):
     if draft is None:
-        await interaction.response.send_message(f"Load or start a draft to join.")
+        await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
 
-    if draft.is_stage(stage=[1, 2, 3]):
-        await interaction.response.send_message("Draft already started", delete_after=10, ephemeral=True)
+    if draft.is_stage([0, 1, 2]):
+        await interaction.response.send_message("Need to start draft before fixing names", delete_after=10, ephemeral=True)
         return
 
-    user = await client.fetch_user(int(user_id))
+    embed = winner_template(draft)
 
-    if draft is not None:
-        for p in draft.draft_players:
-            if p.user_id == user.id:
-                await interaction.response.send_message("You're already in the draft!", delete_after=10, ephemeral=True)
-                return
-
-    draft.add_new_player(user, user.id, user.name, team_name)
-
-    player = None
-    for p in draft.draft_players:
-        if p.user_id == user.id:
-            player = p
-            break
-
-    draft_name = f"draft{draft.draft_name}"
-    save_object(draft, draft_name)
-
-    await interaction.response.send_message(f"{user.name} as joined the draft with team **{player.team_name}**.")
-
-
-@client.tree.command(name="testdraft", description="Draft artists to fantasy team.", guild=GUILD_ID)
-@commands.cooldown(1, draft_command_cooldown, commands.BucketType.user)
-async def draft_artist(interaction: discord.Interaction, artist_name: str, user_id: str):
-    artist_selected = artist_name
-    try:
-        if draft.is_stage(0):
-            await interaction.response.send_message("Need to start draft before drafting players", delete_after=10, ephemeral=True)
-            return
-        elif draft.is_stage([2, 3, 4]):
-            await interaction.response.send_message("Draft is already finished", delete_after=10, ephemeral=True)
-            return
-    except:
-        await interaction.response.send_message("Need to create or import a draft room.", delete_after=10, ephemeral=True)
-        return
-
-    user = await client.fetch_user(int(user_id))
-
-    if draft.is_stage(stage=[2, 3]):
-        await interaction.response.send_message(
-            "Draft is already over.", delete_after=10, ephemeral=True)
-        return
-
-    if draft.draft_players[draft.turn].user_id == user.id:
-        for artist in draft.all_artists:
-            if artist_selected == artist:
-                player = draft.draft_players[draft.turn]
-
-                if artist_selected in draft.drafted_artists:
-                    await interaction.response.send_message(f"{artist_selected} has already been drafted. Draft another artist.", delete_after=10, ephemeral=True)
-                    return
-
-                await interaction.response.send_message(f"{user.name} has drafted {artist_selected}!")
-                player.draft_artist(artist_selected)
-                draft.drafted_artists.add(artist_selected)
-
-                draft.next_turn()
-
-                if draft.is_stage(1):
-                    nextPlayer = draft.draft_players[draft.turn]
-                    user = await client.fetch_user(nextPlayer.user_id)
-
-                    draft_name = f"draft{draft.draft_name}"
-                    save_object(draft, draft_name)
-
-                    await interaction.followup.send(f"{user.mention} You are on the board.\nUse /draft to select a player using their name exactly as written on spotify.\n(must have more than half a million monthly listeners.)")
-                    return
-                else:
-                    draft_name = f"draft{draft.draft_name}"
-                    save_object(draft, draft_name)
-
-                    await interaction.followup.send("Draft Completed.")
-                    return
-        await interaction.response.send_message(f"The artist {artist_selected} is not in the draft pool.", delete_after=10, ephemeral=True)
-        return
-    else:
-        await interaction.response.send_message("It is not your turn.", delete_after=10, ephemeral=True)
-        return
+    await interaction.response.send_message(embed=embed)
 
 client.run(DISCORD_TOKEN)

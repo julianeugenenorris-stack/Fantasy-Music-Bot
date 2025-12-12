@@ -31,6 +31,37 @@ class TemplateView(View):
         await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
 
 
+def winner_template(draft: Draft):
+    wins: dict = {}
+    players: list = reversed(draft.draft_players)
+    for player in players:
+        wins[player] = player.record[0]
+    sorted_descending = dict(sorted(wins.items(), reverse=True))
+    players_sorted: list[Player] = list(sorted_descending.keys())
+    size = len(draft.draft_players)
+    embed = discord.Embed(
+        title=f"Winner is **{players_sorted[0].team_name}**!",
+        description=F"Owned by user **{players_sorted[0].name}**!",
+        color=discord.Color.gold(),
+    )
+
+    embed.set_thumbnail(
+        url="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMWxmd21yeGZ5Y21zeGR6emwxaHI0ZTNpcmFzYWl3Y2xxdWNkNjR0aSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/1pnye1n5EWWHTu93Ly/giphy.gif")
+
+    embed.set_footer(
+        text=f"if there is a tie, the winner is chosen by draft order. Later pick wins tiebreaker.")
+
+    for index in range(1, size-1, 1):
+        player: Player = players_sorted[index]
+        embed.add_field(
+            name=f"{player.team_name}",
+            value=f"{sorted_descending.get(player)} Wins\nOwned by {player.name}",
+            inline=True
+        )
+
+    return embed
+
+
 def team_template(player: Player, draft: Draft):
     embed = discord.Embed(
         title=f"Team **{player.team_name}**",
@@ -185,7 +216,7 @@ def build_billboard_embed(start, end, titles, artists):
     embed.set_thumbnail(
         url="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExN250YjFkZ2ZwZmQwcjNmZmdzMGo4dnY4YzAxeXRydnQxMDU3ZDVocyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VhcU9COxBJQsrBeHTK/giphy.gif"
     )
-    embed.set_footer(text="Features and 'With's are not included.")
+    embed.set_footer(text="Features and With\'s are not included.")
 
     # Loop through 10 tracks
     for index in range(start, end):
@@ -303,8 +334,21 @@ def build_trade_template(player: Player, artist_1: str | None, artist_2: str | N
         color=discord.Color.dark_grey(),
     )
 
-    embed.set_footer(text=f"{player.name} sends\t-\t You receive")
-
+    embed.add_field(
+        name=f"You receive",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{player.name} recieves",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
     embed.add_field(
         name=f"{send_artist_1}",
         value=f"",
@@ -349,10 +393,74 @@ def build_trade_template(player: Player, artist_1: str | None, artist_2: str | N
         value=f"",
         inline=True
     )
+    return embed
+
+
+def build_trade_recipt_template(player: Player, artist_1: str | None, artist_2: str | None, artist_3: str | None, send_artist_1: str | None, send_artist_2: str | None, send_artist_3: str | None):
+    embed = discord.Embed(
+        title=f"You sent a trade to {player.name}",
+        description=F"To Cancel Type \"CANCEL\".\n",
+        color=discord.Color.dark_grey(),
+    )
+
+    embed.add_field(
+        name=f"{player.name} receive",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"You recieve",
+        value=f"",
+        inline=True
+    )
     embed.add_field(
         name=f"",
         value=f"",
         inline=False
+    )
+    embed.add_field(
+        name=f"{send_artist_1}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_1}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
+    if artist_2 is None:
+        return embed
+    embed.add_field(
+        name=f"{send_artist_2}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_2}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"",
+        value=f"",
+        inline=False
+    )
+    if artist_3 is None:
+        return embed
+    embed.add_field(
+        name=f"{send_artist_3}",
+        value=f"",
+        inline=True
+    )
+    embed.add_field(
+        name=f"{artist_3}",
+        value=f"",
+        inline=True
     )
     return embed
 

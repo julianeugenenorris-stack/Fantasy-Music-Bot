@@ -1,6 +1,7 @@
 from cogs.player import Player
 from cogs.scraper import *
 
+from discord import User, Client
 import random
 
 
@@ -491,16 +492,16 @@ class Draft:
 
     def swap_artists(self, player_1: Player, player_2: Player, p1_artist: str, p2_artist: str):
         player_1.artists.remove(p1_artist)
-        player_2.artists.remove(p1_artist)
-        player_1.artists.append(p1_artist)
+        player_2.artists.remove(p2_artist)
+        player_1.artists.append(p2_artist)
         player_2.artists.append(p1_artist)
         info1 = player_1.artist_info.pop(p1_artist)
-        info2 = player_2.artist_info.pop(p1_artist)
-        player_1.artist_info[p1_artist] = info2
+        info2 = player_2.artist_info.pop(p2_artist)
+        player_1.artist_info[p2_artist] = info2
         player_2.artist_info[p1_artist] = info1
 
-    def accept_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
-        user.send("Your trade was accepted!")
+    async def accept_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user: User):
+        await user.send("Your trade was accepted!")
         pieces = trade_sender_player.trade_pieces
         self.swap_artists(trade_sender_player,
                           trade_reciever_player, pieces[0], pieces[3])
@@ -526,19 +527,38 @@ class Draft:
         trade_reciever_player.trades_sent = 0
         return
 
-    def decline_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
+    async def decline_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user: User):
         trade_sender_player.trade_pieces.clear()
         trade_sender_player.trades_sent = 0
         trade_reciever_player.trades_sent = 0
-        user.send("Your trade was declined")
+        await user.send("Your trade was declined")
 
-    def cancel_trade(self, trade_sender_player: Player, trade_reciever_player: Player, user):
+    async def cancel_trade(self, trade_sender_player: Player, user: User, client: Client):
+        try:
+            reciever_id = trade_sender_player.trade_pieces[6]
+        except:
+            await user.send("No trade found")
+            return False
+
+        reciever_player: Player | None = None
+        for p in self.draft_players:
+            if p.user_id == reciever_id:
+                reciever_player = p
+                break
+
+        if reciever_player is None:
+            await user.send("Error: something is wrong hit me up.")
+            return False
+
+        reciever_user = await client.fetch_user(reciever_id)
         trade_sender_player.trade_pieces.clear()
         trade_sender_player.trades_sent = 0
-        trade_reciever_player.trades_sent = 0
-        user.send("Your trade was declined")
+        reciever_player.trades_sent = 0
+        await reciever_user.send(f"{trade_sender_player.name} has canceled their trade.")
+        await user.send("Your trade was cancelled")
+        return True
 
-    def check_if_recieved_trade(self, chech_player: Player):
+    async def check_if_recieved_trade(self, chech_player: Player):
         for player in self.draft_players:
             try:
                 if chech_player.user_id == player.trade_pieces[6]:
@@ -547,7 +567,7 @@ class Draft:
                 pass
         return False
 
-    def artists_exist_on_team(self, artists: list[str | None], team_artists: list[str]):
+    async def artists_exist_on_team(self, artists: list[str | None], team_artists: list[str]):
         """Return first missing artist, or None if all good."""
         for a in artists:
             if a and a not in team_artists:
@@ -573,7 +593,7 @@ class Draft:
             )
             return False
 
-        missing = self.artists_exist_on_team(my_artists, player.artists)
+        missing = await self.artists_exist_on_team(my_artists, player.artists)
         if missing:
             await interaction.response.send_message(
                 f"Artist {missing} is not in Team {player.team_name}.",
@@ -582,7 +602,7 @@ class Draft:
             )
             return False
 
-        missing = self.artists_exist_on_team(their_artists, partner.artists)
+        missing = await self.artists_exist_on_team(their_artists, partner.artists)
         if missing:
             await interaction.response.send_message(
                 f"Artist {missing} is not in Team {partner.team_name}.",
