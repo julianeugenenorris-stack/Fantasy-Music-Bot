@@ -185,4 +185,3 @@ cython_debug/
 TODOList.txt
 test.py
 testcommands.txt
-Dockerfile.txt
