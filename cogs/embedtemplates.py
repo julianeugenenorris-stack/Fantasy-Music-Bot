@@ -52,6 +52,61 @@ def team_template(player: Player, draft: Draft):
     return embed
 
 
+def settings_template(draft: Draft):
+    embed = discord.Embed(
+        title=f"Draft {draft.draft_name} Settings",
+        color=discord.Color.blurple(),
+        description="The league is scored same time every week, so multiply these by 4 for each match"
+    )
+
+    embed.set_thumbnail(
+        url="https://i.pinimg.com/originals/a3/af/7a/a3af7a687027266bb108e86a419eee78.gif")
+
+    settings: dict = draft.get_settings()
+
+    rounds = settings.get("rounds")
+    embed.add_field(
+        name=f"Rounds: {rounds}",
+        value=f"Set to snake draft by default",
+        inline=False
+    )
+
+    listeners = settings.get("listener_mult")
+    embed.add_field(
+        name=f"Listeners Multiplier: {listeners}",
+        value=f"For 10,000,000 Listeners it would be {listeners * 10000000:.2f} points",
+        inline=False
+    )
+
+    change = settings.get("change_mult")
+    embed.add_field(
+        name=f"Change In Listeners Multiplier: {change}",
+        value=f"For 1,000,000 Listeners change it would be {change * 1000000:.2f} points",
+        inline=False
+    )
+
+    album = settings.get("aoty")
+    album_guide = settings.get("aoty_scoring_guide")
+
+    formatted_album = " | ".join(str(x) for x in album)
+    formatted_album_guide = " | ".join(str(x) for x in album_guide)
+    embed.add_field(
+        name=f"Points for albums is based of www.albumoftheyear.org user scores",
+        value=f"Scoring Guide: {formatted_album_guide}\nScoring Points: {formatted_album}",
+        inline=False
+    )
+
+    billboard = settings.get("billboard_scoring")
+    formatted_billboard = " | ".join(str(x) for x in billboard)
+    embed.add_field(
+        name=f"Billboard scoring is based on location of the song\nOnly main artists get points, no features or withs",
+        value=f"From 1 to 100: {formatted_billboard}\n For every spot not represented (below the last spot) is given {billboard[-1]}",
+        inline=False
+    )
+
+    return embed
+
+
 def artists_info_template(artist_name: str, draft: Draft):
     try:
         artist_id = get_artist_id(artist_name)
@@ -128,7 +183,7 @@ def build_billboard_embed(start, end, titles, artists):
     )
 
     embed.set_thumbnail(
-        url="https://upload.wikimedia.org/wikipedia/commons/2/2b/Billboard_Hot_100_logo.jpg"
+        url="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExN250YjFkZ2ZwZmQwcjNmZmdzMGo4dnY4YzAxeXRydnQxMDU3ZDVocyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VhcU9COxBJQsrBeHTK/giphy.gif"
     )
     embed.set_footer(text="Features and 'With's are not included.")
 
@@ -304,7 +359,7 @@ def build_trade_template(player: Player, artist_1: str | None, artist_2: str | N
 
 def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
     if isinstance(p1, str) or isinstance(p2, str):
-        return discord.Embed(title="This player or thier opponent is on a BYE week.", color=discord.Color.dark_grey())
+        return discord.Embed(title=f"BYE week - **{p2.team_name}** {p2.name}" if p1 == "BYE" else f"BYE week - **{p1.team_name}** {p1.name}", color=discord.Color.dark_grey())
 
     players = [p1, p2]
     embed = discord.Embed(
@@ -445,7 +500,7 @@ def build_player_matchup(p1: Player | str, p2: Player | str, type: str):
         for player in players:
             embed.add_field(
                 name=f"Total Listeners Score:",
-                value=f"{player.total_billboard_score:.2f}",
+                value=f"{player.total_listeners_score:.2f}",
                 inline=True
             )
         return embed

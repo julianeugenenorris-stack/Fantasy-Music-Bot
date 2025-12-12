@@ -66,7 +66,7 @@ async def weekly_update(draft: Draft, interaction, day=None, hour=None, minute=N
         await save_changes(draft, interaction, msg)
         await interaction.followup.send("League update is completed!")
 
-        if draft.week_in_season >= season_week_length:
+        if draft.matchup_count > 13:
             # Season is over
             await interaction.followup.send("Season has ended. Finalizing results.")
             draft.next_stage()

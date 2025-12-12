@@ -27,13 +27,20 @@ class Client(commands.Bot):
         if GUILD_ID is None:
             print(f"Syncing without guild, no ID")
             await self.tree.sync()
+            return
 
         try:
+            await client.tree.sync()           # sync globally
+            # remove all global commands
+            client.tree.clear_commands(guild=None, type=None)
+            # add commands locally
             synced = await self.tree.sync(guild=GUILD_ID)
             print(f"Synced {len(synced)} command to guild {GUILD_ID.id}")
+            return
 
         except Exception as e:
             print(f'Error syncing command {e}')
+            return
 
     async def on_message(self, message: Message):
         if message.author == self.user:
@@ -83,7 +90,7 @@ class Client(commands.Bot):
             return
 
         if message.content.startswith("ACCEPT"):
-            try:
+            if len(sending_player.trade_pieces) > 6:
                 if sending_player.trade_pieces[6] == accepting_player.user_id:
                     user = client.fetch_user(sending_player.user_id)
                     draft.accept_trade(sending_player, accepting_player, user)
@@ -92,12 +99,12 @@ class Client(commands.Bot):
                 else:
                     await message.channel.send(f"No trade from player exists.")
                     return
-            except:
+            else:
                 await message.channel.send(f"No trade from player exists.")
                 return
 
         if message.content.startswith("DECLINE"):
-            try:
+            if len(sending_player.trade_pieces) > 6:
                 if sending_player.trade_pieces[6] == accepting_player.user_id:
                     user = client.fetch_user(sending_player.user_id)
                     draft.decline_trade(sending_player, accepting_player, user)
@@ -106,7 +113,7 @@ class Client(commands.Bot):
                 else:
                     await message.channel.send(f"No trade from player exists.")
                     return
-            except:
+            else:
                 await message.channel.send(f"No trade from player exists.")
                 return
         await message.channel.send(f"Some shit went wrong lmk bby girly I am really tired while writting this.")
@@ -221,10 +228,10 @@ async def start_draft(interaction: discord.Interaction):
 async def settings(interaction: discord.Interaction,
                    action: Literal["get", "set"] = "get",
                    rounds: int | None = None,
-                   monthly: float | None = None,
+                   listener: float | None = None,
                    change: float | None = None,
-                   aoty_range: Literal["90+", "89-85", "84-82",
-                                       "81-79", "78-75", "74-65", "64-"] | None = None,
+                   aoty_range: Literal["90+", "89-85",
+                                       "84-82", "81-79", "78-75", "74-70", "69-65", "64-"] | None = None,
                    aoty_score: float | None = None,
                    billboard_score: float | None = None,
                    billboard_spot: int | None = None, ):
@@ -235,18 +242,14 @@ async def settings(interaction: discord.Interaction,
         return
 
     if action == "get":
-        settings = draft.get_settings()
-        formatted_string = ", ".join(
-            [f"{key}: {value}" for key, value in settings.items()])
-        await interaction.response.send_message(formatted_string)
+        embed = settings_template(draft)
+        await interaction.response.send_message(embed=embed)
         return
     if action == "set":
-        draft.new_settings(rounds=rounds, monthly=monthly, change=change, aoty_score=aoty_score, aoty_range=aoty_range,
-                           billboard_score=billboard_score, billboard_spot=billboard_spot+1)
-        settings = draft.get_settings()
-        formatted_string = ", ".join(
-            [f"{key}: {value}" for key, value in settings.items()])
-        await interaction.response.send_message(F"New settings are:\n{formatted_string}")
+        draft.new_settings(rounds=rounds, listener_mult=listener, change_mult=change, aoty_range=aoty_range,
+                           aoty_score=aoty_score, billboard_score=billboard_score, billboard_spot=billboard_spot)
+        embed = settings_template(draft)
+        await interaction.response.send_message(embed=embed)
         return
 
 
@@ -1078,6 +1081,5 @@ async def draft_artist(interaction: discord.Interaction, artist_name: str, user_
     else:
         await interaction.response.send_message("It is not your turn.", delete_after=10, ephemeral=True)
         return
-
 
 client.run(DISCORD_TOKEN)

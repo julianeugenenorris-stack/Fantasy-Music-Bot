@@ -9,7 +9,7 @@ class Draft:
             self,
             name: str,
             rounds: int,
-            listener_mult: float = 0.00000003333,
+            listener_mult: float = 0.0000003333,
             change_mult: float | None = 0.000003333,
             aoty: list | None = [50, 25, 15, 10, 5, 1, -5, -25],
             billboard_scoring: list | None = [
@@ -30,7 +30,7 @@ class Draft:
         :type billboard_scoring: list | None
         """
 
-        self.draft_players: list[str] = []
+        self.draft_players: list[Player] = []
         """List of player names."""
         self.draft_name: str = name
 
@@ -116,9 +116,9 @@ class Draft:
                 self.aoty_scoring[index] = aoty_score
         if billboard_score is not None:
             if billboard_spot is not None:
-                self.billboard_scoring[billboard_spot] = billboard_score
+                self.billboard_scoring[billboard_spot + 1] = billboard_score
 
-    def get_settings(self) -> list:
+    def get_settings(self) -> dict:
         return {
             "rounds": self.rounds,
             "change_mult": self.change_mult,
@@ -266,7 +266,7 @@ class Draft:
     def next_turn(self) -> None:
         """Goes to the next player in the draft order"""
         if self.direction == 1:
-            if self.turn is len(self.draft_players) - 1:
+            if self.turn == len(self.draft_players) - 1:
                 self.direction = -1
                 self.rounds -= 1
                 if self.rounds <= 0:
