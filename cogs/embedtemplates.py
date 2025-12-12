@@ -33,12 +33,16 @@ class TemplateView(View):
 
 def winner_template(draft: Draft):
     wins: dict = {}
-    players: list = reversed(draft.draft_players)
+    players = reversed(draft.draft_players)
+    size = len(draft.draft_players)
+
     for player in players:
         wins[player] = player.record[0]
-    sorted_descending = dict(sorted(wins.items(), reverse=True))
-    players_sorted: list[Player] = list(sorted_descending.keys())
-    size = len(draft.draft_players)
+
+    players_sorted: list[Player] = sorted(
+        wins.keys(), key=lambda p: wins[p], reverse=True
+    )
+
     embed = discord.Embed(
         title=f"Winner is **{players_sorted[0].team_name}**!",
         description=F"Owned by user **{players_sorted[0].name}**!",
@@ -51,12 +55,12 @@ def winner_template(draft: Draft):
     embed.set_footer(
         text=f"if there is a tie, the winner is chosen by draft order. Later pick wins tiebreaker.")
 
-    for index in range(1, size-1, 1):
+    for index in range(0, size):
         player: Player = players_sorted[index]
         embed.add_field(
             name=f"{player.team_name}",
-            value=f"{sorted_descending.get(player)} Wins\nOwned by {player.name}",
-            inline=True
+            value=f"{player.record[0]} Wins\nOwned by {player.name}",
+            inline=False
         )
 
     return embed

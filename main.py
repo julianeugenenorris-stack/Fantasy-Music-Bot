@@ -495,7 +495,7 @@ async def show_billboard_error(ctx, error):
 
 @client.tree.command(name="artistinfo", description="Show a players team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_artist(interaction: discord.Interaction, artist_name: str, show: bool | None = True):
+async def show_artist(interaction: discord.Interaction, artist_name: str):
     global draft
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft use.")
@@ -506,13 +506,6 @@ async def show_artist(interaction: discord.Interaction, artist_name: str, show: 
         embed = artists_info_template(artist_name, draft)
     else:
         await interaction.response.send_message(content="This artist is not in the artist pool or has less than 500,000 monthly listeners", delete_after=10, ephemeral=True)
-        return
-
-    if show is False:
-        if embed is None:
-            await interaction.followup.send(content="No information available for this artist.", ephemeral=True)
-        else:
-            await interaction.followup.send(embed=embed, ephemeral=True)
         return
 
     if embed is None:
@@ -531,7 +524,7 @@ async def show_artist_error(ctx, error):
 
 @client.tree.command(name="albums", description="Show all albums for each artist on team.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_album(interaction: discord.Interaction, time: Literal["mine", "league"], show: bool | None):
+async def show_album(interaction: discord.Interaction, time: Literal["mine", "league"]):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -557,10 +550,6 @@ async def show_album(interaction: discord.Interaction, time: Literal["mine", "le
     elif time == "league":
         embed = new_league_albums_template(draft)
 
-    if show is False:
-        await interaction.response.send_message(embed, ephemeral=True)
-        return
-
     await interaction.response.send_message(embed=embed)
 
 
@@ -574,7 +563,7 @@ async def show_album_error(ctx, error):
 
 @client.tree.command(name="listeners", description="Show a teams listeners for a certain time or time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_listeners(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], week: int | None, show: bool | None):
+async def show_listeners(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], week: int | None):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -604,10 +593,6 @@ async def show_listeners(interaction: discord.Interaction, time: Literal["week",
     else:
         embed = listeners_template(player, draft, time)
 
-    if show is False:
-        await interaction.response.send_message(embed, ephemeral=True)
-        return
-
     await interaction.response.send_message(embed=embed)
 
 
@@ -621,7 +606,7 @@ async def show_listeners_error(ctx, error):
 
 @client.tree.command(name="scores", description="Show a teams scores for a certain time frame.", guild=GUILD_ID)
 @commands.cooldown(1, team_command_cooldown, commands.BucketType.user)
-async def show_scores(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], type: None | Literal["billboard", "change", "aoty", "listeners", "all"], show: bool | None):
+async def show_scores(interaction: discord.Interaction, time: Literal["week", "matchup", "total"], type: None | Literal["billboard", "change", "aoty", "listeners", "all"]):
     if draft is None:
         await interaction.response.send_message(f"Load or start a draft to start a season.")
         return
@@ -651,10 +636,6 @@ async def show_scores(interaction: discord.Interaction, time: Literal["week", "m
         embed = matchup_scores_template(player, type)
     if time == "total":
         embed = total_scores_template(player, type)
-
-    if show is False:
-        await interaction.response.send_message(embed, ephemeral=True)
-        return
 
     await interaction.response.send_message(embed=embed)
 

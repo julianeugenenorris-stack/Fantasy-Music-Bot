@@ -3,7 +3,7 @@ import asyncio
 from discord import Message, Interaction
 from cogs.draft import Draft
 from cogs.scraper import *
-from embedtemplates import winner_template
+from cogs.embedtemplates import winner_template
 
 season_week_length: int = 52
 season_month_length: int = 4
